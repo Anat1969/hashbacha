@@ -1185,47 +1185,128 @@
       return;
     }
 
-    var labels = items.map(function (d, i) { return (i + 1) + '. ' + d.projectName.substring(0, 15); });
-    var devValues = items.map(function (d) { return d.devProfit; });
-    var cityValues = items.map(function (d) { return d.cityProfit; });
+    var byDev = {};
+    items.forEach(function (d) {
+      var name = d.projectName || 'לא ידוע';
+      if (!byDev[name]) byDev[name] = [];
+      byDev[name].push(d);
+    });
+    var devNames = Object.keys(byDev).sort();
+
+    var labels = [];
+    var devValues = [];
+    var cityValues = [];
+    var barColors = [];
+    var borderColors = [];
+    var devGroupColors = [
+      'rgba(52,152,219,0.7)', 'rgba(155,89,182,0.7)', 'rgba(230,126,34,0.7)',
+      'rgba(26,188,156,0.7)', 'rgba(231,76,60,0.7)', 'rgba(52,73,94,0.7)',
+      'rgba(241,196,15,0.7)', 'rgba(142,68,173,0.7)', 'rgba(39,174,96,0.7)'
+    ];
+    var devGroupBorders = [
+      '#2980b9', '#8e44ad', '#e67e22',
+      '#16a085', '#c0392b', '#2c3e50',
+      '#f1c40f', '#9b59b6', '#27ae60'
+    ];
+
+    var devAvgs = [];
+    devNames.forEach(function (name, gi) {
+      var opinions = byDev[name];
+      var colorIdx = gi % devGroupColors.length;
+      var devSum = 0, citySum = 0, cityCount = 0;
+
+      opinions.forEach(function (o, oi) {
+        var label = opinions.length > 1
+          ? name.substring(0, 12) + ' #' + (oi + 1)
+          : name.substring(0, 15);
+        labels.push(label);
+        devValues.push(o.devProfit);
+        cityValues.push(o.cityProfit);
+        barColors.push(devGroupColors[colorIdx]);
+        borderColors.push(devGroupBorders[colorIdx]);
+
+        devSum += o.devProfit;
+        if (o.cityProfit !== null) { citySum += o.cityProfit; cityCount++; }
+      });
+
+      devAvgs.push({
+        name: name,
+        count: opinions.length,
+        avgDev: devSum / opinions.length,
+        avgCity: cityCount > 0 ? citySum / cityCount : null
+      });
+    });
+
     var hasCityData = cityValues.some(function (v) { return v !== null; });
 
     var datasets = [{
       label: 'רווחיות יזם (%)',
       data: devValues,
-      borderColor: '#3498db',
-      backgroundColor: 'rgba(52,152,219,0.1)',
-      tension: 0.3,
-      pointRadius: 4,
-      pointBackgroundColor: devValues.map(function (v) {
-        return profitColorByThreshold(v);
-      })
+      backgroundColor: barColors,
+      borderColor: borderColors,
+      borderWidth: 1
     }];
 
     if (hasCityData) {
       datasets.push({
         label: 'רווחיות עירייה (%)',
         data: cityValues,
-        borderColor: '#27ae60',
-        backgroundColor: 'rgba(39,174,96,0.1)',
-        tension: 0.3,
-        pointRadius: 4
+        backgroundColor: cityValues.map(function (v) {
+          return v !== null ? 'rgba(39,174,96,0.5)' : 'rgba(0,0,0,0)';
+        }),
+        borderColor: cityValues.map(function (v) {
+          return v !== null ? '#27ae60' : 'rgba(0,0,0,0)';
+        }),
+        borderWidth: 1
       });
     }
 
-    datasets.push({
-      label: 'סף 15%',
-      data: devValues.map(function () { return 15; }),
-      borderColor: 'rgba(241,196,15,0.6)',
-      borderDash: [6, 4],
-      pointRadius: 0,
-      fill: false,
-      tension: 0
-    });
-
     var ctx = document.getElementById('chart-gap').getContext('2d');
+
+    var thresholdLine = {
+      id: 'thresholdLine',
+      afterDraw: function (chart) {
+        var yScale = chart.scales.y;
+        var yPos = yScale.getPixelForValue(15);
+        var cCtx = chart.ctx;
+        cCtx.save();
+        cCtx.setLineDash([6, 4]);
+        cCtx.strokeStyle = 'rgba(241,196,15,0.8)';
+        cCtx.lineWidth = 2;
+        cCtx.beginPath();
+        cCtx.moveTo(chart.chartArea.left, yPos);
+        cCtx.lineTo(chart.chartArea.right, yPos);
+        cCtx.stroke();
+        cCtx.restore();
+      }
+    };
+
+    var groupSeparators = {
+      id: 'groupSeparators',
+      afterDraw: function (chart) {
+        var xScale = chart.scales.x;
+        var cCtx = chart.ctx;
+        var idx = 0;
+        cCtx.save();
+        cCtx.setLineDash([3, 3]);
+        cCtx.strokeStyle = 'rgba(0,0,0,0.15)';
+        cCtx.lineWidth = 1;
+        for (var i = 0; i < devNames.length - 1; i++) {
+          idx += byDev[devNames[i]].length;
+          var x1 = xScale.getPixelForValue(idx - 1);
+          var x2 = xScale.getPixelForValue(idx);
+          var xPos = (x1 + x2) / 2;
+          cCtx.beginPath();
+          cCtx.moveTo(xPos, chart.chartArea.top);
+          cCtx.lineTo(xPos, chart.chartArea.bottom);
+          cCtx.stroke();
+        }
+        cCtx.restore();
+      }
+    };
+
     chartInstances.push(new Chart(ctx, {
-      type: 'line',
+      type: 'bar',
       data: { labels: labels, datasets: datasets },
       options: {
         responsive: true,
@@ -1241,27 +1322,31 @@
         },
         scales: {
           y: { title: { display: true, text: 'אחוז רווחיות (%)' }, beginAtZero: true },
-          x: { ticks: { maxRotation: 45 } }
+          x: { ticks: { maxRotation: 45, font: { size: 10 } } }
         }
-      }
+      },
+      plugins: [thresholdLine, groupSeparators]
     }));
 
-    var avgDev = devValues.reduce(function (a, b) { return a + b; }, 0) / devValues.length;
-    var cityFiltered = cityValues.filter(function (v) { return v !== null; });
-    var avgCity = cityFiltered.length > 0 ? cityFiltered.reduce(function (a, b) { return a + b; }, 0) / cityFiltered.length : null;
+    var allDevVals = devValues.filter(function (v) { return v !== null; });
+    var allCityVals = cityValues.filter(function (v) { return v !== null; });
+    var totalAvgDev = allDevVals.reduce(function (a, b) { return a + b; }, 0) / allDevVals.length;
+    var totalAvgCity = allCityVals.length > 0 ? allCityVals.reduce(function (a, b) { return a + b; }, 0) / allCityVals.length : null;
 
-    var explanation = 'ממוצע רווחיות יזם: ' + avgDev.toFixed(1) + '%.';
-    if (avgCity !== null) {
-      explanation += ' ממוצע רווחיות עירייה: ' + avgCity.toFixed(1) + '%.';
-      explanation += ' פער ממוצע: ' + (avgDev - avgCity).toFixed(1) + '%.';
+    var explanation = 'סה״כ ' + items.length + ' חוות דעת, ' + devNames.length + ' יזמים.';
+    explanation += ' ממוצע רווחיות יזם כולל: ' + totalAvgDev.toFixed(1) + '%.';
+    if (totalAvgCity !== null) {
+      explanation += ' ממוצע רווחיות עירייה כולל: ' + totalAvgCity.toFixed(1) + '%.';
+      explanation += ' פער ממוצע: ' + (totalAvgDev - totalAvgCity).toFixed(1) + '%.';
     }
-    explanation += '\nסה״כ ' + items.length + ' חוות דעת עם נתוני רווחיות יזם';
-    if (cityFiltered.length > 0) {
-      explanation += ', מתוכן ' + cityFiltered.length + ' עם נתוני רווחיות עירייה.';
-    } else {
-      explanation += '. אין עדיין נתוני רווחיות עירייה — הפער יחושב כשיוזנו.';
-    }
-    document.getElementById('explain-gap').textContent = explanation;
+    explanation += '\n\nפירוט לפי יזם:';
+    devAvgs.forEach(function (d) {
+      explanation += '\n• ' + d.name + ' (' + d.count + ' חוו״ד) — רווחיות יזם: ' + d.avgDev.toFixed(1) + '%';
+      if (d.avgCity !== null) {
+        explanation += ', עירייה: ' + d.avgCity.toFixed(1) + '%, פער: ' + (d.avgDev - d.avgCity).toFixed(1) + '%';
+      }
+    });
+    document.getElementById('explain-gap').innerHTML = explanation.replace(/\n/g, '<br>');
   }
 
   function renderDevAppraiserChart(data) {
