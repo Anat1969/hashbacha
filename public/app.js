@@ -6,6 +6,8 @@
   var currentSort = { col: null, asc: true };
   var currentProjectId = null;
   var searchTimeout = null;
+  var currentEditingOpinionId = null;
+  var chartInstances = [];
 
   var PROJECT_FIELDS = [
     { key: 'רובע', label: 'רובע', type: 'text' },
@@ -13,7 +15,7 @@
     { key: 'כתובת הפרויקט', label: 'כתובת הפרויקט', type: 'text' },
     { key: "מס' תכנית/ מס זמני", label: "מס׳ תכנית / מס׳ זמני", type: 'text' },
     { key: 'שם התכנית', label: 'שם התכנית', type: 'text' },
-    { key: 'סטטוס רמזור', label: 'סטטוס', type: 'traffic' },
+    { key: 'סטטוס רמזור', label: 'סטטוס', type: 'status' },
     { key: 'קישור', label: 'קישור', type: 'url' }
   ];
 
@@ -33,11 +35,11 @@
     { key: 'שמאי לתבע', label: 'שמאי לתבע', type: 'text' }
   ];
 
-  var TRAFFIC_OPTIONS = [
-    { value: '', label: 'ללא' },
-    { value: 'green', label: 'ירוק' },
-    { value: 'yellow', label: 'צהוב' },
-    { value: 'red', label: 'אדום' }
+  var STATUS_OPTIONS = [
+    { value: '', label: 'ללא', color: '' },
+    { value: 'הוגש', label: 'הוגש', color: '#c0392b' },
+    { value: 'בטיפול', label: 'בטיפול', color: '#e67e22' },
+    { value: 'בוצע', label: 'בוצע', color: '#27ae60' }
   ];
 
   async function init() {
@@ -56,6 +58,7 @@
     }
     appData.settings = appData.settings || {};
     migrateProfit();
+    migrateStatusValues();
     renderProjectsTable();
     wireEvents();
   }
@@ -71,6 +74,19 @@
           migrated = true;
         }
       });
+    });
+    if (migrated) saveData();
+  }
+
+  function migrateStatusValues() {
+    var migrated = false;
+    var map = { 'green': 'בוצע', 'yellow': 'בטיפול', 'red': 'הוגש' };
+    appData.projects.forEach(function (entry) {
+      var val = entry.project['סטטוס רמזור'];
+      if (val && map[val]) {
+        entry.project['סטטוס רמזור'] = map[val];
+        migrated = true;
+      }
     });
     if (migrated) saveData();
   }
@@ -145,6 +161,7 @@
       var p = entry.project;
       var tr = document.createElement('tr');
       tr.setAttribute('data-id', p._id);
+      var sc = statusColor(p['סטטוס רמזור']);
       tr.innerHTML =
         '<td>' + (i + 1) + '</td>' +
         '<td>' + esc(p['רובע']) + '</td>' +
@@ -152,7 +169,7 @@
         '<td>' + esc(p['כתובת הפרויקט']) + '</td>' +
         '<td>' + esc(p["מס' תכנית/ מס זמני"]) + '</td>' +
         '<td>' + esc(p['שם התכנית']) + '</td>' +
-        '<td>' + esc(trafficLabel(p['סטטוס רמזור'])) + '</td>' +
+        '<td' + (sc ? ' style="color:' + sc + ';font-weight:600"' : '') + '>' + esc(statusLabel(p['סטטוס רמזור'])) + '</td>' +
         '<td>' + entry.opinions.length + '</td>' +
         '<td class="actions">' +
           '<button class="btn-sm" data-action="view" data-id="' + p._id + '">צפה</button> ' +
@@ -176,21 +193,31 @@
 
   function showProjectDetail(id) {
     currentProjectId = id;
+    currentEditingOpinionId = null;
     var entry = findEntry(id);
     if (!entry) return;
 
     document.getElementById('view-projects').hidden = true;
     document.getElementById('view-detail').hidden = false;
+    document.getElementById('view-analytics').hidden = true;
 
     var info = document.getElementById('project-info');
+    info.classList.remove('editing');
     info.innerHTML = '';
+    var editBar = document.getElementById('inline-edit-bar');
+    if (editBar) editBar.remove();
+
+    document.getElementById('btn-edit-project').hidden = false;
+
     PROJECT_FIELDS.forEach(function (f) {
       var val = entry.project[f.key] || '';
       var div = document.createElement('div');
       div.className = 'field';
-      if (f.type === 'traffic') {
+      div.setAttribute('data-key', f.key);
+      if (f.type === 'status') {
+        var sc = statusColor(val);
         div.innerHTML = '<span class="field-label">' + esc(f.label) + '</span>' +
-          '<span class="field-value">' + esc(trafficLabel(val)) + '</span>';
+          '<span class="field-value"' + (sc ? ' style="color:' + sc + ';font-weight:600"' : '') + '>' + esc(statusLabel(val)) + '</span>';
       } else if (f.type === 'url' && val) {
         div.innerHTML = '<span class="field-label">' + esc(f.label) + '</span>' +
           '<span class="field-value"><a href="' + esc(val) + '" target="_blank" dir="ltr">' + esc(val) + '</a></span>';
@@ -202,6 +229,225 @@
     });
 
     renderOpinionsTable(entry);
+  }
+
+  // ── Inline Project Editing ──
+
+  function startInlineProjectEdit(id) {
+    var entry = findEntry(id);
+    if (!entry) return;
+    var info = document.getElementById('project-info');
+    info.classList.add('editing');
+    document.getElementById('btn-edit-project').hidden = true;
+
+    var bar = document.createElement('div');
+    bar.id = 'inline-edit-bar';
+    bar.className = 'inline-edit-bar';
+    bar.innerHTML = '<button class="btn-save" id="btn-inline-save-project">שמור</button>' +
+      '<button class="btn-cancel" id="btn-inline-cancel-project">ביטול</button>';
+    info.parentNode.insertBefore(bar, info);
+
+    PROJECT_FIELDS.forEach(function (f) {
+      var div = info.querySelector('[data-key="' + f.key + '"]');
+      if (!div) return;
+      var valSpan = div.querySelector('.field-value');
+      if (!valSpan) return;
+      var val = entry.project[f.key] || '';
+      var input;
+      if (f.type === 'status') {
+        input = document.createElement('select');
+        input.name = f.key;
+        STATUS_OPTIONS.forEach(function (opt) {
+          var option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.label;
+          if (val === opt.value) option.selected = true;
+          input.appendChild(option);
+        });
+      } else {
+        input = document.createElement('input');
+        input.type = f.type === 'url' ? 'url' : 'text';
+        if (f.type === 'url') input.dir = 'ltr';
+        input.name = f.key;
+        input.value = val;
+      }
+      valSpan.innerHTML = '';
+      valSpan.appendChild(input);
+    });
+
+    document.getElementById('btn-inline-save-project').onclick = function () {
+      var data = {};
+      PROJECT_FIELDS.forEach(function (f) {
+        var el = info.querySelector('[name="' + f.key + '"]');
+        data[f.key] = el ? el.value : '';
+      });
+      updateProject(id, data);
+    };
+    document.getElementById('btn-inline-cancel-project').onclick = function () {
+      showProjectDetail(id);
+    };
+  }
+
+  // ── Inline Opinion Editing ──
+
+  function startInlineOpinionEdit(opinionId) {
+    if (currentEditingOpinionId) {
+      showToast('יש לסיים עריכה קודמת לפני התחלת עריכה חדשה');
+      return;
+    }
+    var entry = findEntry(currentProjectId);
+    if (!entry) return;
+    var op = entry.opinions.find(function (o) { return o._id === opinionId; });
+    if (!op) return;
+
+    currentEditingOpinionId = opinionId;
+    var tbody = document.querySelector('#opinions-table tbody');
+    var rows = tbody.querySelectorAll('tr');
+    var targetRow = null;
+    for (var i = 0; i < rows.length; i++) {
+      var btn = rows[i].querySelector('[data-action="edit-opinion"][data-id="' + opinionId + '"]');
+      if (btn) { targetRow = rows[i]; break; }
+    }
+    if (!targetRow) return;
+
+    targetRow.classList.add('editing-row');
+    var cells = targetRow.querySelectorAll('td');
+    var originalNotes = op['הערות / סטטוס'] || '';
+
+    OPINION_FIELDS.forEach(function (f, idx) {
+      var cell = cells[idx + 1];
+      if (!cell) return;
+      var val = op[f.key] || '';
+      cell.innerHTML = '';
+      var input;
+      if (f.type === 'textarea') {
+        input = document.createElement('textarea');
+        input.value = val;
+        input.setAttribute('data-original-notes', originalNotes);
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = val;
+        if (f.placeholder) input.placeholder = f.placeholder;
+      }
+      input.name = f.key;
+      cell.appendChild(input);
+    });
+
+    var actionsCell = cells[cells.length - 1];
+    actionsCell.innerHTML = '<button class="btn-sm btn-save" data-action="save-opinion" data-id="' + opinionId + '">שמור</button> ' +
+      '<button class="btn-sm btn-cancel" data-action="cancel-opinion">ביטול</button>';
+  }
+
+  function saveInlineOpinionEdit(opinionId) {
+    var entry = findEntry(currentProjectId);
+    if (!entry) return;
+    var op = entry.opinions.find(function (o) { return o._id === opinionId; });
+    if (!op) return;
+
+    var tbody = document.querySelector('#opinions-table tbody');
+    var row = tbody.querySelector('tr.editing-row');
+    if (!row) return;
+
+    var data = {};
+    OPINION_FIELDS.forEach(function (f) {
+      var el = row.querySelector('[name="' + f.key + '"]');
+      data[f.key] = el ? el.value : '';
+    });
+
+    var notesEl = row.querySelector('[name="הערות / סטטוס"]');
+    if (notesEl) {
+      var originalNotes = notesEl.getAttribute('data-original-notes') || '';
+      var newVal = data['הערות / סטטוס'];
+      if (newVal !== originalNotes && newVal.trim()) {
+        data['הערות / סטטוס'] = appendTimestampToNotes(originalNotes, newVal);
+      }
+    }
+
+    currentEditingOpinionId = null;
+    updateOpinion(currentProjectId, opinionId, data);
+  }
+
+  function cancelInlineOpinionEdit() {
+    currentEditingOpinionId = null;
+    var entry = findEntry(currentProjectId);
+    if (entry) renderOpinionsTable(entry);
+  }
+
+  // ── Inline New Opinion ──
+
+  function showInlineNewOpinionRow() {
+    if (currentEditingOpinionId) {
+      showToast('יש לסיים עריכה קודמת');
+      return;
+    }
+    currentEditingOpinionId = '__new__';
+    var tbody = document.querySelector('#opinions-table tbody');
+    var tr = document.createElement('tr');
+    tr.className = 'new-opinion-row';
+    var rowNum = tbody.querySelectorAll('tr').length + 1;
+    var html = '<td>' + rowNum + '</td>';
+    OPINION_FIELDS.forEach(function (f) {
+      html += '<td>';
+      if (f.type === 'textarea') {
+        html += '<textarea name="' + f.key + '"></textarea>';
+      } else {
+        html += '<input type="text" name="' + f.key + '"' +
+          (f.placeholder ? ' placeholder="' + f.placeholder + '"' : '') + '>';
+      }
+      html += '</td>';
+    });
+    html += '<td>' + esc('') + '</td>';
+    html += '<td class="actions">' +
+      '<button class="btn-sm btn-save" data-action="save-new-opinion">שמור</button> ' +
+      '<button class="btn-sm btn-cancel" data-action="cancel-new-opinion">ביטול</button></td>';
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+    tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function saveInlineNewOpinion() {
+    var tbody = document.querySelector('#opinions-table tbody');
+    var row = tbody.querySelector('tr.new-opinion-row');
+    if (!row) return;
+
+    var data = {};
+    OPINION_FIELDS.forEach(function (f) {
+      var el = row.querySelector('[name="' + f.key + '"]');
+      data[f.key] = el ? el.value : '';
+    });
+
+    if (data['הערות / סטטוס'] && data['הערות / סטטוס'].trim()) {
+      data['הערות / סטטוס'] = todayStamp() + ': ' + data['הערות / סטטוס'].trim();
+    }
+
+    currentEditingOpinionId = null;
+    addOpinion(currentProjectId, data);
+  }
+
+  function cancelInlineNewOpinion() {
+    currentEditingOpinionId = null;
+    var row = document.querySelector('#opinions-table tbody tr.new-opinion-row');
+    if (row) row.remove();
+  }
+
+  // ── Auto-timestamp ──
+
+  function todayStamp() {
+    var d = new Date();
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+  }
+
+  function appendTimestampToNotes(originalNotes, newValue) {
+    var stamp = todayStamp();
+    if (!originalNotes || !originalNotes.trim()) {
+      return stamp + ': ' + newValue.trim();
+    }
+    var added = newValue.substring(originalNotes.length).trim();
+    if (added) {
+      return originalNotes + '\n' + stamp + ': ' + added;
+    }
+    return stamp + ': ' + newValue.trim();
   }
 
   function renderOpinionsTable(entry) {
@@ -254,7 +500,9 @@
 
   function goBackToList() {
     currentProjectId = null;
+    currentEditingOpinionId = null;
     document.getElementById('view-detail').hidden = true;
+    document.getElementById('view-analytics').hidden = true;
     document.getElementById('view-projects').hidden = false;
     renderProjectsTable();
   }
@@ -267,9 +515,9 @@
       var label = document.createElement('label');
       label.textContent = f.label;
       var input;
-      if (f.type === 'traffic') {
+      if (f.type === 'status') {
         input = document.createElement('select');
-        TRAFFIC_OPTIONS.forEach(function (opt) {
+        STATUS_OPTIONS.forEach(function (opt) {
           var option = document.createElement('option');
           option.value = opt.value;
           option.textContent = opt.label;
@@ -414,7 +662,7 @@
         rows.push([
           rowNum, p['רובע'] || '', p['שם היזם'] || '', p['כתובת הפרויקט'] || '',
           p["מס' תכנית/ מס זמני"] || '', p['שם התכנית'] || '',
-          trafficLabel(p['סטטוס רמזור']), p['קישור'] || '',
+          statusLabel(p['סטטוס רמזור']), p['קישור'] || '',
           '', '', '', '', '', '', '', '', '', '', '', '', ''
         ]);
       } else {
@@ -423,7 +671,7 @@
           rows.push([
             rowNum, p['רובע'] || '', p['שם היזם'] || '', p['כתובת הפרויקט'] || '',
             p["מס' תכנית/ מס זמני"] || '', p['שם התכנית'] || '',
-            trafficLabel(p['סטטוס רמזור']), p['קישור'] || '',
+            statusLabel(p['סטטוס רמזור']), p['קישור'] || '',
             o['שמאי מטעם היזם'] || '', o['שמאי מטעם העירייה'] || '',
             o['תאריך קבלת בקשה'] || '', o['תאריך קבלת חוו"ד'] || '',
             o['דו"ח אחרון מעודכן'] || '', o['מס יחידות קימיות'] || '',
@@ -487,7 +735,7 @@
                 'כתובת הפרויקט': val('כתובת הפרויקט'),
                 "מס' תכנית/ מס זמני": val("מס' תכנית/ מס זמני"),
                 'שם התכנית': val('שם התכנית'),
-                'סטטוס רמזור': reverseTrafficLabel(val('סטטוס רמזור')),
+                'סטטוס רמזור': reverseStatusLabel(val('סטטוס רמזור')),
                 'קישור': val('קישור')
               },
               opinions: []
@@ -620,6 +868,316 @@
     });
   }
 
+  // ── Analytics ──
+
+  function showAnalytics() {
+    document.getElementById('view-projects').hidden = true;
+    document.getElementById('view-detail').hidden = true;
+    document.getElementById('view-analytics').hidden = false;
+    renderCharts();
+  }
+
+  function collectAnalyticsData() {
+    var items = [];
+    appData.projects.forEach(function (entry) {
+      var p = entry.project;
+      entry.opinions.forEach(function (o) {
+        var devProfit = parsePercent(o['רווחיות יזם (%)']);
+        var cityProfit = parsePercent(o['רווחיות עירייה (%)']);
+        items.push({
+          projectName: p['שם היזם'] || '',
+          address: p['כתובת הפרויקט'] || '',
+          devAppraiser: o['שמאי מטעם היזם'] || '',
+          cityAppraiser: o['שמאי מטעם העירייה'] || '',
+          devProfit: devProfit,
+          cityProfit: cityProfit,
+          gap: (devProfit !== null && cityProfit !== null) ? devProfit - cityProfit : null,
+          date: o['תאריך קבלת חוו"ד'] || o['תאריך קבלת בקשה'] || ''
+        });
+      });
+    });
+    return items;
+  }
+
+  function renderCharts() {
+    chartInstances.forEach(function (c) { c.destroy(); });
+    chartInstances = [];
+
+    if (typeof Chart === 'undefined') {
+      showToast('לא ניתן לטעון את ספריית הגרפים');
+      return;
+    }
+
+    var data = collectAnalyticsData();
+
+    renderGapChart(data);
+    renderDevAppraiserChart(data);
+    renderCityAppraiserChart(data);
+    renderPairGapChart(data);
+  }
+
+  function renderGapChart(data) {
+    var items = data.filter(function (d) { return d.devProfit !== null; });
+    if (items.length === 0) {
+      document.getElementById('explain-gap').textContent = 'אין מספיק נתונים להצגת גרף זה.';
+      return;
+    }
+
+    var labels = items.map(function (d, i) { return (i + 1) + '. ' + d.projectName.substring(0, 15); });
+    var devValues = items.map(function (d) { return d.devProfit; });
+    var cityValues = items.map(function (d) { return d.cityProfit; });
+    var hasCityData = cityValues.some(function (v) { return v !== null; });
+
+    var datasets = [{
+      label: 'רווחיות יזם (%)',
+      data: devValues,
+      borderColor: '#3498db',
+      backgroundColor: 'rgba(52,152,219,0.1)',
+      tension: 0.3,
+      pointRadius: 4,
+      pointBackgroundColor: devValues.map(function (v, i) {
+        if (cityValues[i] === null) return '#3498db';
+        return v > cityValues[i] ? '#c0392b' : '#27ae60';
+      })
+    }];
+
+    if (hasCityData) {
+      datasets.push({
+        label: 'רווחיות עירייה (%)',
+        data: cityValues,
+        borderColor: '#27ae60',
+        backgroundColor: 'rgba(39,174,96,0.1)',
+        tension: 0.3,
+        pointRadius: 4
+      });
+    }
+
+    var ctx = document.getElementById('chart-gap').getContext('2d');
+    chartInstances.push(new Chart(ctx, {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top', rtl: true, labels: { font: { family: 'Segoe UI, Tahoma, Arial' } } },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                return context.dataset.label + ': ' + (context.parsed.y !== null ? context.parsed.y.toFixed(1) + '%' : 'N/A');
+              }
+            }
+          }
+        },
+        scales: {
+          y: { title: { display: true, text: 'אחוז רווחיות (%)' }, beginAtZero: true },
+          x: { ticks: { maxRotation: 45 } }
+        }
+      }
+    }));
+
+    var avgDev = devValues.reduce(function (a, b) { return a + b; }, 0) / devValues.length;
+    var cityFiltered = cityValues.filter(function (v) { return v !== null; });
+    var avgCity = cityFiltered.length > 0 ? cityFiltered.reduce(function (a, b) { return a + b; }, 0) / cityFiltered.length : null;
+
+    var explanation = 'ממוצע רווחיות יזם: ' + avgDev.toFixed(1) + '%.';
+    if (avgCity !== null) {
+      explanation += ' ממוצע רווחיות עירייה: ' + avgCity.toFixed(1) + '%.';
+      explanation += ' פער ממוצע: ' + (avgDev - avgCity).toFixed(1) + '%.';
+    }
+    explanation += '\nסה״כ ' + items.length + ' חוות דעת עם נתוני רווחיות יזם';
+    if (cityFiltered.length > 0) {
+      explanation += ', מתוכן ' + cityFiltered.length + ' עם נתוני רווחיות עירייה.';
+    } else {
+      explanation += '. אין עדיין נתוני רווחיות עירייה — הפער יחושב כשיוזנו.';
+    }
+    document.getElementById('explain-gap').textContent = explanation;
+  }
+
+  function renderDevAppraiserChart(data) {
+    var byAppraiser = {};
+    data.forEach(function (d) {
+      if (!d.devAppraiser || d.devProfit === null) return;
+      if (!byAppraiser[d.devAppraiser]) byAppraiser[d.devAppraiser] = [];
+      byAppraiser[d.devAppraiser].push(d.devProfit);
+    });
+
+    var names = Object.keys(byAppraiser).sort();
+    if (names.length === 0) {
+      document.getElementById('explain-appraisers-dev').textContent = 'אין מספיק נתונים.';
+      return;
+    }
+
+    var avgs = names.map(function (n) {
+      var vals = byAppraiser[n];
+      return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    });
+    var counts = names.map(function (n) { return byAppraiser[n].length; });
+    var maxAvg = Math.max.apply(null, avgs);
+    var minAvg = Math.min.apply(null, avgs);
+
+    var colors = avgs.map(function (v) {
+      var ratio = maxAvg > minAvg ? (v - minAvg) / (maxAvg - minAvg) : 0.5;
+      var r = Math.round(192 + ratio * 63);
+      var g = Math.round(231 - ratio * 160);
+      var b = Math.round(43 + ratio * 0);
+      return 'rgba(' + r + ',' + g + ',' + b + ',0.8)';
+    });
+
+    var ctx = document.getElementById('chart-appraisers-dev').getContext('2d');
+    chartInstances.push(new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: names.map(function (n, i) { return n + ' (' + counts[i] + ')'; }),
+        datasets: [{
+          label: 'ממוצע רווחיות יזם (%)',
+          data: avgs,
+          backgroundColor: colors,
+          borderColor: colors.map(function (c) { return c.replace('0.8', '1'); }),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (context) { return 'ממוצע: ' + context.parsed.y.toFixed(1) + '%'; }
+            }
+          }
+        },
+        scales: {
+          y: { title: { display: true, text: 'ממוצע רווחיות (%)' }, beginAtZero: true },
+          x: { ticks: { maxRotation: 45 } }
+        }
+      }
+    }));
+
+    var highest = names[avgs.indexOf(maxAvg)];
+    var lowest = names[avgs.indexOf(minAvg)];
+    document.getElementById('explain-appraisers-dev').textContent =
+      'שמאי עם ממוצע הרווחיות הגבוה ביותר: ' + highest + ' (' + maxAvg.toFixed(1) + '%).' +
+      ' שמאי עם ממוצע הרווחיות הנמוך ביותר: ' + lowest + ' (' + minAvg.toFixed(1) + '%).' +
+      ' מספר השמאים: ' + names.length + '.';
+  }
+
+  function renderCityAppraiserChart(data) {
+    var byAppraiser = {};
+    data.forEach(function (d) {
+      if (!d.cityAppraiser || d.cityProfit === null) return;
+      if (!byAppraiser[d.cityAppraiser]) byAppraiser[d.cityAppraiser] = [];
+      byAppraiser[d.cityAppraiser].push(d.cityProfit);
+    });
+
+    var names = Object.keys(byAppraiser).sort();
+    if (names.length === 0) {
+      document.getElementById('explain-appraisers-city').textContent =
+        'אין עדיין נתוני רווחיות עירייה — הגרף יוצג כשיוזנו נתונים בעמודת "רווחיות עירייה (%)".';
+      return;
+    }
+
+    var avgs = names.map(function (n) {
+      var vals = byAppraiser[n];
+      return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    });
+    var counts = names.map(function (n) { return byAppraiser[n].length; });
+
+    var ctx = document.getElementById('chart-appraisers-city').getContext('2d');
+    chartInstances.push(new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: names.map(function (n, i) { return n + ' (' + counts[i] + ')'; }),
+        datasets: [{
+          label: 'ממוצע רווחיות עירייה (%)',
+          data: avgs,
+          backgroundColor: 'rgba(39,174,96,0.7)',
+          borderColor: 'rgba(39,174,96,1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { title: { display: true, text: 'ממוצע רווחיות (%)' }, beginAtZero: true },
+          x: { ticks: { maxRotation: 45 } }
+        }
+      }
+    }));
+
+    document.getElementById('explain-appraisers-city').textContent =
+      'סה״כ ' + names.length + ' שמאי עירייה עם נתוני רווחיות.';
+  }
+
+  function renderPairGapChart(data) {
+    var byPair = {};
+    data.forEach(function (d) {
+      if (!d.devAppraiser || !d.cityAppraiser || d.gap === null) return;
+      var key = d.devAppraiser + ' / ' + d.cityAppraiser;
+      if (!byPair[key]) byPair[key] = [];
+      byPair[key].push(d.gap);
+    });
+
+    var pairs = Object.keys(byPair).sort();
+    if (pairs.length === 0) {
+      document.getElementById('explain-ext-vs-city').textContent =
+        'אין חוות דעת עם שני ערכי רווחיות (יזם + עירייה) להשוואה. הגרף יוצג כשיוזנו נתונים.';
+      return;
+    }
+
+    var avgGaps = pairs.map(function (k) {
+      var vals = byPair[k];
+      return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    });
+
+    var colors = avgGaps.map(function (g) {
+      return g > 0 ? 'rgba(192,57,43,0.7)' : 'rgba(39,174,96,0.7)';
+    });
+
+    var ctx = document.getElementById('chart-ext-vs-city').getContext('2d');
+    chartInstances.push(new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: pairs,
+        datasets: [{
+          label: 'פער ממוצע (%)',
+          data: avgGaps,
+          backgroundColor: colors,
+          borderColor: colors.map(function (c) { return c.replace('0.7', '1'); }),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                var v = context.parsed.y;
+                return 'פער: ' + (v > 0 ? '+' : '') + v.toFixed(1) + '% ' +
+                  (v > 0 ? '(לטובת היזם)' : '(לטובת העירייה)');
+              }
+            }
+          }
+        },
+        scales: {
+          y: { title: { display: true, text: 'פער ממוצע (%)' } },
+          x: { ticks: { maxRotation: 45 } }
+        }
+      }
+    }));
+
+    var proDevCount = avgGaps.filter(function (g) { return g > 0; }).length;
+    var proCityCount = avgGaps.filter(function (g) { return g <= 0; }).length;
+    document.getElementById('explain-ext-vs-city').textContent =
+      'סה״כ ' + pairs.length + ' זוגות שמאים.' +
+      ' ' + proDevCount + ' זוגות עם פער לטובת היזם (אדום).' +
+      ' ' + proCityCount + ' זוגות עם פער לטובת העירייה (ירוק).';
+  }
+
+  // ── Wire Events ──
+
   function wireEvents() {
     document.getElementById('search-input').addEventListener('input', function () {
       clearTimeout(searchTimeout);
@@ -643,6 +1201,8 @@
 
     document.getElementById('btn-settings').addEventListener('click', showSettings);
 
+    document.getElementById('btn-analytics').addEventListener('click', showAnalytics);
+
     document.querySelectorAll('#projects-table thead th[data-col]').forEach(function (th) {
       th.addEventListener('click', function () {
         var col = th.dataset.col;
@@ -664,10 +1224,8 @@
         var id = btn.dataset.id;
         if (action === 'view') showProjectDetail(id);
         else if (action === 'edit-project') {
-          var entry = findEntry(id);
-          if (entry) showModal('עריכת פרויקט', PROJECT_FIELDS, entry.project, function (data) {
-            updateProject(id, data);
-          });
+          showProjectDetail(id);
+          setTimeout(function () { startInlineProjectEdit(id); }, 50);
         }
         else if (action === 'delete-project') deleteProject(id);
         return;
@@ -679,16 +1237,11 @@
     document.getElementById('btn-back').addEventListener('click', goBackToList);
 
     document.getElementById('btn-edit-project').addEventListener('click', function () {
-      var entry = findEntry(currentProjectId);
-      if (entry) showModal('עריכת פרויקט', PROJECT_FIELDS, entry.project, function (data) {
-        updateProject(currentProjectId, data);
-      });
+      startInlineProjectEdit(currentProjectId);
     });
 
     document.getElementById('btn-add-opinion').addEventListener('click', function () {
-      showModal('חוות דעת חדשה', OPINION_FIELDS, {}, function (data) {
-        addOpinion(currentProjectId, data);
-      });
+      showInlineNewOpinionRow();
     });
 
     document.getElementById('btn-notify-new').addEventListener('click', function () {
@@ -707,16 +1260,21 @@
       var action = btn.dataset.action;
       var opId = btn.dataset.id;
       if (action === 'edit-opinion') {
-        var entry = findEntry(currentProjectId);
-        if (!entry) return;
-        var op = entry.opinions.find(function (o) { return o._id === opId; });
-        if (op) showModal('עריכת חוות דעת', OPINION_FIELDS, op, function (data) {
-          updateOpinion(currentProjectId, opId, data);
-        });
+        startInlineOpinionEdit(opId);
       } else if (action === 'delete-opinion') {
         deleteOpinion(currentProjectId, opId);
+      } else if (action === 'save-opinion') {
+        saveInlineOpinionEdit(opId);
+      } else if (action === 'cancel-opinion') {
+        cancelInlineOpinionEdit();
+      } else if (action === 'save-new-opinion') {
+        saveInlineNewOpinion();
+      } else if (action === 'cancel-new-opinion') {
+        cancelInlineNewOpinion();
       }
     });
+
+    document.getElementById('btn-analytics-back').addEventListener('click', goBackToList);
 
     document.getElementById('modal-overlay').addEventListener('click', function (e) {
       if (e.target === this) {
@@ -747,19 +1305,23 @@
     return d.innerHTML;
   }
 
-  function trafficLabel(val) {
-    if (val === 'green') return 'ירוק';
-    if (val === 'yellow') return 'צהוב';
-    if (val === 'red') return 'אדום';
-    return '—';
+  function statusLabel(val) {
+    if (!val) return '—';
+    return val;
   }
 
-  function reverseTrafficLabel(text) {
+  function statusColor(val) {
+    var opt = STATUS_OPTIONS.find(function (o) { return o.value === val; });
+    return opt ? opt.color : '';
+  }
+
+  function reverseStatusLabel(text) {
     if (!text) return '';
     var t = text.trim();
-    if (t === 'ירוק') return 'green';
-    if (t === 'צהוב') return 'yellow';
-    if (t === 'אדום') return 'red';
+    if (t === 'ירוק') return 'בוצע';
+    if (t === 'צהוב') return 'בטיפול';
+    if (t === 'אדום') return 'הוגש';
+    if (t === 'הוגש' || t === 'בטיפול' || t === 'בוצע') return t;
     return '';
   }
 

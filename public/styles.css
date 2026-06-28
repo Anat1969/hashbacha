@@ -357,6 +357,117 @@ td.actions {
   opacity: 0;
 }
 
+/* Inline editing */
+#project-info.editing .field-value input,
+#project-info.editing .field-value select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  direction: rtl;
+  width: 100%;
+}
+
+#project-info.editing .field-value input[type="url"] {
+  direction: ltr;
+  text-align: left;
+}
+
+.inline-edit-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #ecf0f1;
+}
+
+tr.editing-row td {
+  background: #fffde7 !important;
+}
+
+tr.editing-row input,
+tr.editing-row select,
+tr.editing-row textarea {
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #bdc3c7;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  direction: rtl;
+  width: 100%;
+  min-width: 60px;
+}
+
+tr.editing-row textarea {
+  min-height: 40px;
+  resize: vertical;
+}
+
+tr.new-opinion-row td {
+  background: #e8f5e9 !important;
+}
+
+tr.new-opinion-row input,
+tr.new-opinion-row select,
+tr.new-opinion-row textarea {
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #bdc3c7;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  direction: rtl;
+  width: 100%;
+  min-width: 60px;
+}
+
+tr.new-opinion-row textarea {
+  min-height: 40px;
+  resize: vertical;
+}
+
+/* Analytics */
+#analytics-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+  gap: 1.5rem;
+}
+
+.chart-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.chart-card h4 {
+  margin-bottom: 0.8rem;
+  font-size: 1rem;
+  color: #2c3e50;
+}
+
+.chart-card canvas {
+  width: 100% !important;
+  max-height: 300px;
+}
+
+.chart-explanation {
+  margin-top: 0.8rem;
+  padding: 0.6rem 0.8rem;
+  border-right: 3px solid #3498db;
+  background: #f8f9fa;
+  font-size: 0.82rem;
+  color: #555;
+  line-height: 1.7;
+  border-radius: 0 4px 4px 0;
+}
+
+@media (max-width: 600px) {
+  #analytics-content {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Row clickable */
 tr[data-id] {
   cursor: pointer;
