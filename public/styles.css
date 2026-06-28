@@ -426,11 +426,41 @@ tr.new-opinion-row textarea {
   resize: vertical;
 }
 
+/* Analytics tabs */
+.analytics-tab-bar {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.analytics-tab {
+  padding: 0.5rem 1.2rem;
+  background: #d5d8dc;
+  color: #333;
+  border: none;
+  border-radius: 4px 4px 0 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.analytics-tab:hover {
+  background: #bfc4c9;
+}
+
+.analytics-tab.active {
+  background: #2c3e50;
+  color: #fff;
+}
+
 /* Analytics */
 #analytics-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-  gap: 1.5rem;
+  display: block;
+}
+
+.chart-card:not(.active-chart) {
+  display: none;
 }
 
 .chart-card {
@@ -466,6 +496,99 @@ tr.new-opinion-row textarea {
   #analytics-content {
     grid-template-columns: 1fr;
   }
+}
+
+/* Column group headers */
+.column-group-row th.col-group {
+  text-align: center;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.2rem;
+  border-bottom: 2px solid rgba(255,255,255,0.3);
+}
+
+.col-group-appraisers { background: #2980b9 !important; }
+.col-group-dates { background: #8e44ad !important; }
+.col-group-units { background: #16a085 !important; }
+.col-group-profit { background: #d35400 !important; }
+.col-group-other { background: #7f8c8d !important; }
+
+/* Accordion expanded row */
+tr.expanded-detail-row > td {
+  padding: 1rem;
+  background: #f8f9fa !important;
+  border-right: 3px solid #3498db;
+}
+
+tr.expanded-detail-row:hover > td {
+  background: #f8f9fa !important;
+}
+
+.expanded-opinions-wrap {
+  overflow-x: auto;
+}
+
+.expanded-opinions-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.expanded-opinions-wrap thead th {
+  background: #34495e;
+  color: #fff;
+  padding: 0.3rem 0.3rem;
+  font-size: 0.72rem;
+}
+
+.expanded-opinions-wrap tbody td {
+  padding: 0.25rem 0.3rem;
+  font-size: 0.78rem;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+.expanded-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  align-items: center;
+}
+
+tr[data-id] .expand-arrow {
+  display: inline-block;
+  margin-left: 0.3rem;
+  transition: transform 0.2s;
+  font-size: 0.7rem;
+}
+
+tr[data-id].expanded .expand-arrow {
+  transform: rotate(90deg);
+}
+
+/* Group header rows */
+tr.group-header-row td {
+  background: #2c3e50 !important;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.8rem;
+  cursor: default;
+}
+
+tr.group-header-row:hover td {
+  background: #34495e !important;
+}
+
+/* Group-by select in toolbar */
+#group-by-select {
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  direction: rtl;
+  background: #d5d8dc;
+  color: #333;
+  cursor: pointer;
 }
 
 /* Row clickable */
