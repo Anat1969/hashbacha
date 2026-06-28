@@ -5,7 +5,7 @@
   "dependencies": {
     "@dotenvx/dotenvx": "latest",
     "express": "latest",
-    "nodemailer": "latest"
-  },
-  "devDependencies": {}
+    "nodemailer": "latest",
+    "xlsx": "^0.18.5"
+  }
 }
