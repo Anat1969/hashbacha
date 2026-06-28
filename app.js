@@ -8,11 +8,12 @@
   var searchTimeout = null;
 
   var PROJECT_FIELDS = [
+    { key: 'רובע', label: 'רובע', type: 'text' },
     { key: 'שם היזם', label: 'שם היזם', type: 'text' },
     { key: 'כתובת הפרויקט', label: 'כתובת הפרויקט', type: 'text' },
     { key: "מס' תכנית/ מס זמני", label: "מס׳ תכנית / מס׳ זמני", type: 'text' },
     { key: 'שם התכנית', label: 'שם התכנית', type: 'text' },
-    { key: 'סטטוס רמזור', label: 'סטטוס רמזור', type: 'traffic' },
+    { key: 'סטטוס רמזור', label: 'סטטוס', type: 'traffic' },
     { key: 'קישור', label: 'קישור', type: 'url' }
   ];
 
@@ -21,10 +22,15 @@
     { key: 'שמאי מטעם העירייה', label: 'שמאי מטעם העירייה', type: 'text' },
     { key: 'תאריך קבלת בקשה', label: 'תאריך קבלת בקשה', type: 'text', placeholder: 'DD/MM/YYYY' },
     { key: 'תאריך קבלת חוו"ד', label: 'תאריך קבלת חוו״ד', type: 'text', placeholder: 'DD/MM/YYYY' },
-    { key: 'רווחיות (%)', label: 'רווחיות (%)', type: 'text' },
+    { key: 'דו"ח אחרון מעודכן', label: 'דו״ח אחרון מעודכן', type: 'text', placeholder: 'DD/MM/YYYY' },
+    { key: 'מס יחידות קימיות', label: 'מס׳ יחידות קיימות', type: 'text' },
+    { key: 'סה"כ יחידות בתכנית', label: 'סה״כ יחידות בתכנית', type: 'text' },
+    { key: 'רווחיות יזם (%)', label: 'רווחיות יזם (%)', type: 'text' },
+    { key: 'רווחיות עירייה (%)', label: 'רווחיות עירייה (%)', type: 'text' },
     { key: 'הערות / סטטוס', label: 'הערות / סטטוס', type: 'textarea' },
     { key: 'מימוש', label: 'מימוש', type: 'text' },
-    { key: 'ת.ב.', label: 'ת.ב.', type: 'text' }
+    { key: 'ת.ב.', label: 'ת.ב.', type: 'text' },
+    { key: 'שמאי לתבע', label: 'שמאי לתבע', type: 'text' }
   ];
 
   var TRAFFIC_OPTIONS = [
@@ -33,8 +39,6 @@
     { value: 'yellow', label: 'צהוב' },
     { value: 'red', label: 'אדום' }
   ];
-
-  // ── Init ──
 
   async function init() {
     try {
@@ -51,11 +55,25 @@
       appData = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(window.SEED_DATA));
     }
     appData.settings = appData.settings || {};
+    migrateProfit();
     renderProjectsTable();
     wireEvents();
   }
 
-  // ── Data Layer ──
+  function migrateProfit() {
+    var migrated = false;
+    appData.projects.forEach(function (entry) {
+      entry.opinions.forEach(function (o) {
+        if (('רווחיות (%)' in o) && !('רווחיות יזם (%)' in o)) {
+          o['רווחיות יזם (%)'] = o['רווחיות (%)'];
+          o['רווחיות עירייה (%)'] = '';
+          delete o['רווחיות (%)'];
+          migrated = true;
+        }
+      });
+    });
+    if (migrated) saveData();
+  }
 
   async function saveData() {
     if (serverMode) {
@@ -72,8 +90,6 @@
       localStorage.setItem('hashbacha-data', JSON.stringify(appData));
     }
   }
-
-  // ── Render: Projects Table ──
 
   function getFilteredProjects() {
     var query = (document.getElementById('search-input').value || '').trim().toLowerCase();
@@ -131,28 +147,21 @@
       tr.setAttribute('data-id', p._id);
       tr.innerHTML =
         '<td>' + (i + 1) + '</td>' +
+        '<td>' + esc(p['רובע']) + '</td>' +
         '<td>' + esc(p['שם היזם']) + '</td>' +
         '<td>' + esc(p['כתובת הפרויקט']) + '</td>' +
         '<td>' + esc(p["מס' תכנית/ מס זמני"]) + '</td>' +
         '<td>' + esc(p['שם התכנית']) + '</td>' +
-        '<td>' + trafficDot(p['סטטוס רמזור']) + '</td>' +
+        '<td>' + esc(trafficLabel(p['סטטוס רמזור'])) + '</td>' +
         '<td>' + entry.opinions.length + '</td>' +
         '<td class="actions">' +
           '<button class="btn-sm" data-action="view" data-id="' + p._id + '">צפה</button> ' +
-          '<button class="btn-sm btn-secondary" data-action="edit-project" data-id="' + p._id + '">ערוך</button> ' +
-          '<button class="btn-sm btn-danger" data-action="delete-project" data-id="' + p._id + '">מחק</button>' +
+          '<button class="btn-sm" data-action="edit-project" data-id="' + p._id + '">ערוך</button> ' +
+          '<button class="btn-sm" data-action="delete-project" data-id="' + p._id + '">מחק</button>' +
         '</td>';
       tbody.appendChild(tr);
     }
     updateSortIndicators();
-  }
-
-  function trafficDot(val) {
-    var cls = 'traffic-none';
-    if (val === 'green') cls = 'traffic-green';
-    else if (val === 'yellow') cls = 'traffic-yellow';
-    else if (val === 'red') cls = 'traffic-red';
-    return '<span class="traffic-light ' + cls + '"></span>';
   }
 
   function updateSortIndicators() {
@@ -164,8 +173,6 @@
       }
     }
   }
-
-  // ── Render: Project Detail ──
 
   function showProjectDetail(id) {
     currentProjectId = id;
@@ -183,7 +190,7 @@
       div.className = 'field';
       if (f.type === 'traffic') {
         div.innerHTML = '<span class="field-label">' + esc(f.label) + '</span>' +
-          '<span class="field-value">' + trafficDot(val) + ' ' + trafficLabel(val) + '</span>';
+          '<span class="field-value">' + esc(trafficLabel(val)) + '</span>';
       } else if (f.type === 'url' && val) {
         div.innerHTML = '<span class="field-label">' + esc(f.label) + '</span>' +
           '<span class="field-value"><a href="' + esc(val) + '" target="_blank" dir="ltr">' + esc(val) + '</a></span>';
@@ -202,6 +209,7 @@
     tbody.innerHTML = '';
     for (var i = 0; i < entry.opinions.length; i++) {
       var o = entry.opinions[i];
+      var gap = calcGap(o['רווחיות יזם (%)'], o['רווחיות עירייה (%)']);
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td>' + (i + 1) + '</td>' +
@@ -209,16 +217,39 @@
         '<td>' + esc(o['שמאי מטעם העירייה']) + '</td>' +
         '<td>' + esc(o['תאריך קבלת בקשה']) + '</td>' +
         '<td>' + esc(o['תאריך קבלת חוו"ד']) + '</td>' +
-        '<td>' + esc(o['רווחיות (%)']) + '</td>' +
+        '<td>' + esc(o['דו"ח אחרון מעודכן']) + '</td>' +
+        '<td>' + esc(o['מס יחידות קימיות']) + '</td>' +
+        '<td>' + esc(o['סה"כ יחידות בתכנית']) + '</td>' +
+        '<td>' + esc(o['רווחיות יזם (%)']) + '</td>' +
+        '<td>' + esc(o['רווחיות עירייה (%)']) + '</td>' +
+        '<td class="' + gap.cls + '">' + esc(gap.value) + '</td>' +
         '<td>' + esc(o['הערות / סטטוס']) + '</td>' +
         '<td>' + esc(o['מימוש']) + '</td>' +
         '<td>' + esc(o['ת.ב.']) + '</td>' +
+        '<td>' + esc(o['שמאי לתבע']) + '</td>' +
         '<td class="actions">' +
-          '<button class="btn-sm btn-secondary" data-action="edit-opinion" data-id="' + o._id + '">ערוך</button> ' +
-          '<button class="btn-sm btn-danger" data-action="delete-opinion" data-id="' + o._id + '">מחק</button>' +
+          '<button class="btn-sm" data-action="edit-opinion" data-id="' + o._id + '">ערוך</button> ' +
+          '<button class="btn-sm" data-action="delete-opinion" data-id="' + o._id + '">מחק</button>' +
         '</td>';
       tbody.appendChild(tr);
     }
+  }
+
+  function calcGap(devStr, cityStr) {
+    var dev = parsePercent(devStr);
+    var city = parsePercent(cityStr);
+    if (dev === null || city === null) return { value: '', cls: '' };
+    var gap = dev - city;
+    if (Math.abs(gap) < 0.01) return { value: '0%', cls: '' };
+    if (gap > 0) return { value: '+' + gap.toFixed(1) + '%', cls: 'gap-developer' };
+    return { value: gap.toFixed(1) + '%', cls: 'gap-city' };
+  }
+
+  function parsePercent(str) {
+    if (!str) return null;
+    var cleaned = String(str).replace(/%/g, '').trim();
+    var num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
   }
 
   function goBackToList() {
@@ -227,8 +258,6 @@
     document.getElementById('view-projects').hidden = false;
     renderProjectsTable();
   }
-
-  // ── Modal ──
 
   function showModal(title, fields, values, onSave) {
     document.getElementById('modal-title').textContent = title;
@@ -285,8 +314,6 @@
     cancelBtn.onclick = cleanup;
   }
 
-  // ── Confirm ──
-
   function confirmAction(message) {
     return new Promise(function (resolve) {
       document.getElementById('confirm-message').textContent = message;
@@ -301,8 +328,6 @@
       };
     });
   }
-
-  // ── CRUD ──
 
   function addProject(data) {
     var entry = {
@@ -368,42 +393,146 @@
     showToast('חוות דעת נמחקה');
   }
 
-  // ── Export / Import ──
+  // ── Excel Export / Import ──
 
-  function exportJSON() {
-    var blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
+  function exportExcel() {
+    var headers = [
+      '#', 'רובע', 'שם היזם', 'כתובת הפרויקט', "מס' תכנית/ מס זמני",
+      'שם התכנית', 'סטטוס רמזור', 'קישור',
+      'שמאי מטעם היזם', 'שמאי מטעם העירייה',
+      'תאריך קבלת בקשה', 'תאריך קבלת חוו"ד',
+      'דו"ח אחרון מעודכן', 'מס יחידות קימיות', 'סה"כ יחידות בתכנית',
+      'רווחיות יזם (%)', 'רווחיות עירייה (%)',
+      'הערות / סטטוס', 'מימוש', 'ת.ב.', 'שמאי לתבע'
+    ];
+    var rows = [headers];
+    var rowNum = 0;
+    appData.projects.forEach(function (entry) {
+      var p = entry.project;
+      if (entry.opinions.length === 0) {
+        rowNum++;
+        rows.push([
+          rowNum, p['רובע'] || '', p['שם היזם'] || '', p['כתובת הפרויקט'] || '',
+          p["מס' תכנית/ מס זמני"] || '', p['שם התכנית'] || '',
+          trafficLabel(p['סטטוס רמזור']), p['קישור'] || '',
+          '', '', '', '', '', '', '', '', '', '', '', '', ''
+        ]);
+      } else {
+        entry.opinions.forEach(function (o) {
+          rowNum++;
+          rows.push([
+            rowNum, p['רובע'] || '', p['שם היזם'] || '', p['כתובת הפרויקט'] || '',
+            p["מס' תכנית/ מס זמני"] || '', p['שם התכנית'] || '',
+            trafficLabel(p['סטטוס רמזור']), p['קישור'] || '',
+            o['שמאי מטעם היזם'] || '', o['שמאי מטעם העירייה'] || '',
+            o['תאריך קבלת בקשה'] || '', o['תאריך קבלת חוו"ד'] || '',
+            o['דו"ח אחרון מעודכן'] || '', o['מס יחידות קימיות'] || '',
+            o['סה"כ יחידות בתכנית'] || '',
+            o['רווחיות יזם (%)'] || '', o['רווחיות עירייה (%)'] || '',
+            o['הערות / סטטוס'] || '', o['מימוש'] || '',
+            o['ת.ב.'] || '', o['שמאי לתבע'] || ''
+          ]);
+        });
+      }
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = headers.map(function () { return { wch: 16 }; });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'נתונים');
     var d = new Date();
-    a.href = url;
-    a.download = 'hashbacha-export-' + d.getFullYear() + '-' +
-      pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('קובץ יוצא בהצלחה');
+    XLSX.writeFile(wb, 'hashbacha-' + d.getFullYear() + '-' +
+      pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.xlsx');
+    showToast('קובץ Excel יוצא בהצלחה');
   }
 
-  function importJSON(file) {
+  function importExcel(file) {
     var reader = new FileReader();
     reader.onload = async function (e) {
       try {
-        var data = JSON.parse(e.target.result);
-        if (!data || !Array.isArray(data.projects)) {
-          showToast('קובץ לא תקין – חסר מערך projects');
+        var wb = XLSX.read(e.target.result, { type: 'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (rows.length < 2) {
+          showToast('הקובץ ריק');
           return;
         }
-        var ok = await confirmAction('לייבא קובץ? הנתונים הנוכחיים יוחלפו.');
+        var ok = await confirmAction('לייבא קובץ Excel? הנתונים הנוכחיים יוחלפו.');
         if (!ok) return;
-        appData = data;
-        appData.settings = appData.settings || {};
+
+        var hdr = rows[0];
+        var colIdx = {};
+        hdr.forEach(function (h, i) { colIdx[String(h).trim()] = i; });
+
+        var projectsMap = {};
+        var projectsList = [];
+
+        for (var r = 1; r < rows.length; r++) {
+          var row = rows[r];
+          if (!row || row.length === 0) continue;
+          var val = function (key) {
+            var i = colIdx[key];
+            return (i !== undefined && row[i] != null) ? String(row[i]) : '';
+          };
+
+          var projectKey = (val('שם היזם') + '||' + val("מס' תכנית/ מס זמני")).toLowerCase();
+          var entry;
+          if (projectsMap[projectKey]) {
+            entry = projectsMap[projectKey];
+          } else {
+            entry = {
+              project: {
+                _id: genId(),
+                'רובע': val('רובע'),
+                'שם היזם': val('שם היזם'),
+                'כתובת הפרויקט': val('כתובת הפרויקט'),
+                "מס' תכנית/ מס זמני": val("מס' תכנית/ מס זמני"),
+                'שם התכנית': val('שם התכנית'),
+                'סטטוס רמזור': reverseTrafficLabel(val('סטטוס רמזור')),
+                'קישור': val('קישור')
+              },
+              opinions: []
+            };
+            projectsMap[projectKey] = entry;
+            projectsList.push(entry);
+          }
+
+          var hasOpinionData = val('שמאי מטעם היזם') || val('שמאי מטעם העירייה') ||
+            val('תאריך קבלת בקשה') || val('תאריך קבלת חוו"ד') ||
+            val('רווחיות יזם (%)') || val('רווחיות עירייה (%)') ||
+            val('הערות / סטטוס') || val('מימוש') || val('ת.ב.') || val('שמאי לתבע');
+
+          if (hasOpinionData) {
+            entry.opinions.push({
+              _id: genId(),
+              'שמאי מטעם היזם': val('שמאי מטעם היזם'),
+              'שמאי מטעם העירייה': val('שמאי מטעם העירייה'),
+              'תאריך קבלת בקשה': val('תאריך קבלת בקשה'),
+              'תאריך קבלת חוו"ד': val('תאריך קבלת חוו"ד'),
+              'דו"ח אחרון מעודכן': val('דו"ח אחרון מעודכן'),
+              'מס יחידות קימיות': val('מס יחידות קימיות'),
+              'סה"כ יחידות בתכנית': val('סה"כ יחידות בתכנית'),
+              'רווחיות יזם (%)': val('רווחיות יזם (%)'),
+              'רווחיות עירייה (%)': val('רווחיות עירייה (%)'),
+              'הערות / סטטוס': val('הערות / סטטוס'),
+              'מימוש': val('מימוש'),
+              'ת.ב.': val('ת.ב.'),
+              'שמאי לתבע': val('שמאי לתבע')
+            });
+          }
+        }
+
+        appData = {
+          settings: appData.settings || {},
+          projects: projectsList
+        };
         saveData();
         goBackToList();
-        showToast('נתונים יובאו בהצלחה');
+        showToast('נתונים יובאו בהצלחה (' + projectsList.length + ' פרויקטים)');
       } catch (err) {
         showToast('שגיאה בקריאת הקובץ');
       }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   }
 
   // ── Email ──
@@ -479,8 +608,6 @@
     showToast('נפתח חלון מייל');
   }
 
-  // ── Settings ──
-
   function showSettings() {
     showModal('הגדרות', [
       { key: 'ilanitEmail', label: 'מייל אילנית', type: 'text' },
@@ -492,8 +619,6 @@
       showToast('הגדרות נשמרו');
     });
   }
-
-  // ── Events ──
 
   function wireEvents() {
     document.getElementById('search-input').addEventListener('input', function () {
@@ -507,18 +632,17 @@
       });
     });
 
-    document.getElementById('btn-export').addEventListener('click', exportJSON);
+    document.getElementById('btn-export').addEventListener('click', exportExcel);
 
     document.getElementById('import-file').addEventListener('change', function (e) {
       if (e.target.files.length) {
-        importJSON(e.target.files[0]);
+        importExcel(e.target.files[0]);
         e.target.value = '';
       }
     });
 
     document.getElementById('btn-settings').addEventListener('click', showSettings);
 
-    // Sort headers
     document.querySelectorAll('#projects-table thead th[data-col]').forEach(function (th) {
       th.addEventListener('click', function () {
         var col = th.dataset.col;
@@ -532,7 +656,6 @@
       });
     });
 
-    // Table actions (delegated)
     document.getElementById('projects-table').addEventListener('click', function (e) {
       var btn = e.target.closest('button[data-action]');
       if (btn) {
@@ -553,7 +676,6 @@
       if (row) showProjectDetail(row.dataset.id);
     });
 
-    // Detail view actions
     document.getElementById('btn-back').addEventListener('click', goBackToList);
 
     document.getElementById('btn-edit-project').addEventListener('click', function () {
@@ -579,7 +701,6 @@
       if (entry) notifyOpinionReady(entry);
     });
 
-    // Opinion table actions (delegated)
     document.getElementById('opinions-table').addEventListener('click', function (e) {
       var btn = e.target.closest('button[data-action]');
       if (!btn) return;
@@ -597,7 +718,6 @@
       }
     });
 
-    // Close modal on overlay click
     document.getElementById('modal-overlay').addEventListener('click', function (e) {
       if (e.target === this) {
         this.hidden = true;
@@ -610,8 +730,6 @@
       }
     });
   }
-
-  // ── Helpers ──
 
   function findEntry(id) {
     return appData.projects.find(function (e) { return e.project._id === id; });
@@ -636,6 +754,15 @@
     return '—';
   }
 
+  function reverseTrafficLabel(text) {
+    if (!text) return '';
+    var t = text.trim();
+    if (t === 'ירוק') return 'green';
+    if (t === 'צהוב') return 'yellow';
+    if (t === 'אדום') return 'red';
+    return '';
+  }
+
   function pad(n) {
     return n < 10 ? '0' + n : String(n);
   }
@@ -651,6 +778,5 @@
     }, 2500);
   }
 
-  // ── Boot ──
   document.addEventListener('DOMContentLoaded', init);
 })();
