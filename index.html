@@ -17,6 +17,7 @@
         ייבוא Excel
         <input type="file" id="import-file" accept=".xlsx,.xls" hidden />
       </label>
+      <button id="btn-analytics">ניתוח נתונים</button>
       <button id="btn-settings">הגדרות</button>
     </div>
   </header>
@@ -83,6 +84,35 @@
         </table>
       </div>
     </section>
+
+    <section id="view-analytics" hidden>
+      <div class="detail-header">
+        <button id="btn-analytics-back">&#8594; חזרה לרשימה</button>
+        <h2 style="margin:0">ניתוח נתונים</h2>
+      </div>
+      <div id="analytics-content">
+        <div class="chart-card">
+          <h4>פערי רווחיות: יזם מול עירייה</h4>
+          <canvas id="chart-gap"></canvas>
+          <div id="explain-gap" class="chart-explanation"></div>
+        </div>
+        <div class="chart-card">
+          <h4>השוואת שמאים – ממוצע רווחיות יזם</h4>
+          <canvas id="chart-appraisers-dev"></canvas>
+          <div id="explain-appraisers-dev" class="chart-explanation"></div>
+        </div>
+        <div class="chart-card">
+          <h4>השוואת שמאים – ממוצע רווחיות עירייה</h4>
+          <canvas id="chart-appraisers-city"></canvas>
+          <div id="explain-appraisers-city" class="chart-explanation"></div>
+        </div>
+        <div class="chart-card">
+          <h4>שמאי יזם מול שמאי עירייה – פער ממוצע</h4>
+          <canvas id="chart-ext-vs-city"></canvas>
+          <div id="explain-ext-vs-city" class="chart-explanation"></div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <div id="modal-overlay" hidden>
@@ -108,7 +138,8 @@
 
   <div id="toast" hidden></div>
 
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="chart.umd.min.js"></script>
+  <script src="xlsx.full.min.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
