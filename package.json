@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "latest",
+    "express": "latest",
+    "nodemailer": "latest"
+  },
+  "devDependencies": {}
+}
