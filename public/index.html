@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ניהול חוות דעת השבחה</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>ניהול חוות דעת – אגף השבחה</h1>
+    <div id="toolbar">
+      <input id="search-input" type="text" placeholder="חיפוש חופשי..." />
+      <button id="btn-add-project">+ פרויקט חדש</button>
+      <button id="btn-export">ייצוא JSON</button>
+      <label id="btn-import" class="btn">
+        ייבוא JSON
+        <input type="file" id="import-file" accept=".json" hidden />
+      </label>
+      <button id="btn-settings">הגדרות</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-projects">
+      <div class="table-wrap">
+        <table id="projects-table">
+          <thead>
+            <tr>
+              <th data-col="#">#</th>
+              <th data-col="שם היזם">שם היזם</th>
+              <th data-col="כתובת הפרויקט">כתובת הפרויקט</th>
+              <th data-col="מס' תכנית/ מס זמני">מס׳ תכנית</th>
+              <th data-col="שם התכנית">שם התכנית</th>
+              <th data-col="סטטוס רמזור">רמזור</th>
+              <th data-col="opinions">חוו״ד</th>
+              <th>פעולות</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-detail" hidden>
+      <div class="detail-header">
+        <button id="btn-back">&#8594; חזרה לרשימה</button>
+        <div class="detail-actions">
+          <button id="btn-edit-project" class="btn-secondary">ערוך פרויקט</button>
+          <button id="btn-notify-new" class="btn-mail">שלח מייל – פרויקט חדש</button>
+        </div>
+      </div>
+      <div id="project-info"></div>
+      <div class="opinions-header">
+        <h3>חוות דעת</h3>
+        <button id="btn-add-opinion">+ חוות דעת חדשה</button>
+        <button id="btn-notify-ready" class="btn-mail">שלח מייל – קיימת חוו״ד</button>
+      </div>
+      <div class="table-wrap">
+        <table id="opinions-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>שמאי מטעם היזם</th>
+              <th>שמאי מטעם העירייה</th>
+              <th>תאריך קבלת בקשה</th>
+              <th>תאריך קבלת חוו״ד</th>
+              <th>רווחיות (%)</th>
+              <th>הערות / סטטוס</th>
+              <th>מימוש</th>
+              <th>ת.ב.</th>
+              <th>פעולות</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-overlay" hidden>
+    <div id="modal">
+      <h3 id="modal-title"></h3>
+      <form id="modal-form"></form>
+      <div id="modal-actions">
+        <button id="btn-modal-save" type="button">שמור</button>
+        <button id="btn-modal-cancel" type="button">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirm-overlay" hidden>
+    <div id="confirm-dialog">
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button id="btn-confirm-yes" class="btn-danger">מחק</button>
+        <button id="btn-confirm-no">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" hidden></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
