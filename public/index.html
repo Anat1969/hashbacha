@@ -12,10 +12,10 @@
     <div id="toolbar">
       <input id="search-input" type="text" placeholder="חיפוש חופשי..." />
       <button id="btn-add-project">+ פרויקט חדש</button>
-      <button id="btn-export">ייצוא JSON</button>
+      <button id="btn-export">ייצוא Excel</button>
       <label id="btn-import" class="btn">
-        ייבוא JSON
-        <input type="file" id="import-file" accept=".json" hidden />
+        ייבוא Excel
+        <input type="file" id="import-file" accept=".xlsx,.xls" hidden />
       </label>
       <button id="btn-settings">הגדרות</button>
     </div>
@@ -28,11 +28,12 @@
           <thead>
             <tr>
               <th data-col="#">#</th>
+              <th data-col="רובע">רובע</th>
               <th data-col="שם היזם">שם היזם</th>
               <th data-col="כתובת הפרויקט">כתובת הפרויקט</th>
               <th data-col="מס' תכנית/ מס זמני">מס׳ תכנית</th>
               <th data-col="שם התכנית">שם התכנית</th>
-              <th data-col="סטטוס רמזור">רמזור</th>
+              <th data-col="סטטוס רמזור">סטטוס</th>
               <th data-col="opinions">חוו״ד</th>
               <th>פעולות</th>
             </tr>
@@ -61,14 +62,20 @@
           <thead>
             <tr>
               <th>#</th>
-              <th>שמאי מטעם היזם</th>
-              <th>שמאי מטעם העירייה</th>
-              <th>תאריך קבלת בקשה</th>
-              <th>תאריך קבלת חוו״ד</th>
-              <th>רווחיות (%)</th>
+              <th>שמאי יזם</th>
+              <th>שמאי עירייה</th>
+              <th>תאריך בקשה</th>
+              <th>תאריך חוו״ד</th>
+              <th>דו״ח מעודכן</th>
+              <th>יח׳ קיימות</th>
+              <th>יח׳ בתכנית</th>
+              <th>רווחיות יזם (%)</th>
+              <th>רווחיות עירייה (%)</th>
+              <th>פער (%)</th>
               <th>הערות / סטטוס</th>
               <th>מימוש</th>
               <th>ת.ב.</th>
+              <th>שמאי לתבע</th>
               <th>פעולות</th>
             </tr>
           </thead>
@@ -101,6 +108,7 @@
 
   <div id="toast" hidden></div>
 
+  <script src="xlsx.full.min.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
