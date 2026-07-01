@@ -1382,7 +1382,7 @@
 
     explanation += '<br><br><strong>פירוט לפי יזם:</strong>';
     devAvgs.forEach(function (d) {
-      var flag = d.avgDev > 15 ? ' ⬆' : ' ⬇';
+      var flag = d.avgDev > 15 ? ' <span style="color:#27ae60">⬆</span>' : ' <span style="color:#c0392b">⬇</span>';
       explanation += '<br>• ' + d.name + ' (' + d.count + ' חוו״ד) — רווחיות יזם: ' + d.avgDev.toFixed(1) + '%' + flag;
       if (d.avgCity !== null) {
         explanation += ', עירייה: ' + d.avgCity.toFixed(1) + '%, פער: ' + (d.avgDev - d.avgCity).toFixed(1) + '%';
@@ -1465,7 +1465,7 @@
     }
     exp += '<br><br><strong>פירוט:</strong>';
     names.forEach(function (n, i) {
-      var flag = avgs[i] > 15 ? ' ⬆' : ' ⬇';
+      var flag = avgs[i] > 15 ? ' <span style="color:#27ae60">⬆</span>' : ' <span style="color:#c0392b">⬇</span>';
       exp += '<br>• ' + n + ': ' + avgs[i].toFixed(1) + '%' + flag + ' (' + counts[i] + ' חוו״ד)';
     });
     document.getElementById('explain-appraisers-dev').innerHTML = exp;
@@ -1538,7 +1538,7 @@
     }
     cExp += '<br><br><strong>פירוט:</strong>';
     names.forEach(function (n, i) {
-      var flag = cityAvgs[i] > 15 ? ' ⬆' : ' ⬇';
+      var flag = cityAvgs[i] > 15 ? ' <span style="color:#27ae60">⬆</span>' : ' <span style="color:#c0392b">⬇</span>';
       cExp += '<br>• ' + n + ': ' + cityAvgs[i].toFixed(1) + '%' + flag + ' (' + counts[i] + ' חוו״ד)';
     });
     document.getElementById('explain-appraisers-city').innerHTML = cExp;
