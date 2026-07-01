@@ -17,8 +17,15 @@
         ייבוא Excel
         <input type="file" id="import-file" accept=".xlsx,.xls" hidden />
       </label>
+      <select id="group-by-select">
+        <option value="">ללא קיבוץ</option>
+        <option value="רובע">קבץ לפי רובע</option>
+        <option value="avgProfit">קבץ לפי רווחיות</option>
+        <option value="סטטוס רמזור">קבץ לפי סטטוס</option>
+      </select>
       <button id="btn-analytics">ניתוח נתונים</button>
       <button id="btn-settings">הגדרות</button>
+      <a href="https://claude.ai/code/session_01JiyWVYW1tYguCNpammGiBg" target="_blank" class="btn btn-upgrade">שידרוג</a>
     </div>
   </header>
 
@@ -36,6 +43,7 @@
               <th data-col="שם התכנית">שם התכנית</th>
               <th data-col="סטטוס רמזור">סטטוס</th>
               <th data-col="opinions">חוו״ד</th>
+              <th data-col="avgProfit">רווחיות ממוצעת</th>
               <th>פעולות</th>
             </tr>
           </thead>
@@ -61,8 +69,16 @@
       <div class="table-wrap">
         <table id="opinions-table">
           <thead>
+            <tr class="column-group-row">
+              <th rowspan="2">#</th>
+              <th colspan="2" class="col-group col-group-appraisers">שמאים</th>
+              <th colspan="3" class="col-group col-group-dates">תאריכים</th>
+              <th colspan="2" class="col-group col-group-units">יחידות</th>
+              <th colspan="3" class="col-group col-group-profit">רווחיות</th>
+              <th colspan="4" class="col-group col-group-other">אחר</th>
+              <th rowspan="2">פעולות</th>
+            </tr>
             <tr>
-              <th>#</th>
               <th>שמאי יזם</th>
               <th>שמאי עירייה</th>
               <th>תאריך בקשה</th>
@@ -77,7 +93,6 @@
               <th>מימוש</th>
               <th>ת.ב.</th>
               <th>שמאי לתבע</th>
-              <th>פעולות</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -85,29 +100,54 @@
       </div>
     </section>
 
-    <section id="view-analytics" hidden>
+    <section id="view-analytics-menu" hidden>
       <div class="detail-header">
-        <button id="btn-analytics-back">&#8594; חזרה לרשימה</button>
+        <button id="btn-analytics-menu-back">&#8594; חזרה לרשימה</button>
         <h2 style="margin:0">ניתוח נתונים</h2>
       </div>
+      <div class="analytics-menu-grid">
+        <div class="analytics-menu-card" data-tab="gap">
+          <div class="analytics-menu-icon">📊</div>
+          <h3>פערי רווחיות</h3>
+          <p>יזם מול עירייה — השוואת רווחיות מקובצת לפי יזם עם פערים בין-יזמיים</p>
+        </div>
+        <div class="analytics-menu-card" data-tab="appraisers-dev">
+          <div class="analytics-menu-icon">👤</div>
+          <h3>שמאים – יזם</h3>
+          <p>ממוצע רווחיות לפי שמאי היזם — זיהוי שמאים עם נטייה לרווחיות גבוהה או נמוכה</p>
+        </div>
+        <div class="analytics-menu-card" data-tab="appraisers-city">
+          <div class="analytics-menu-icon">🏛️</div>
+          <h3>שמאים – עירייה</h3>
+          <p>ממוצע רווחיות לפי שמאי העירייה — בחינת עקביות השמאים מטעם העירייה</p>
+        </div>
+        <div class="analytics-menu-card" data-tab="ext-vs-city">
+          <div class="analytics-menu-icon">⚖️</div>
+          <h3>זוגות שמאים</h3>
+          <p>שמאי יזם מול שמאי עירייה — ניתוח פער ממוצע לפי צמדי שמאים</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-analytics-chart" hidden>
+      <div class="detail-header">
+        <button id="btn-analytics-chart-back">&#8594; חזרה לתפריט ניתוח</button>
+        <h2 id="analytics-chart-title" style="margin:0"></h2>
+      </div>
       <div id="analytics-content">
-        <div class="chart-card">
-          <h4>פערי רווחיות: יזם מול עירייה</h4>
+        <div class="chart-card active-chart" data-tab="gap">
           <canvas id="chart-gap"></canvas>
           <div id="explain-gap" class="chart-explanation"></div>
         </div>
-        <div class="chart-card">
-          <h4>השוואת שמאים – ממוצע רווחיות יזם</h4>
+        <div class="chart-card" data-tab="appraisers-dev">
           <canvas id="chart-appraisers-dev"></canvas>
           <div id="explain-appraisers-dev" class="chart-explanation"></div>
         </div>
-        <div class="chart-card">
-          <h4>השוואת שמאים – ממוצע רווחיות עירייה</h4>
+        <div class="chart-card" data-tab="appraisers-city">
           <canvas id="chart-appraisers-city"></canvas>
           <div id="explain-appraisers-city" class="chart-explanation"></div>
         </div>
-        <div class="chart-card">
-          <h4>שמאי יזם מול שמאי עירייה – פער ממוצע</h4>
+        <div class="chart-card" data-tab="ext-vs-city">
           <canvas id="chart-ext-vs-city"></canvas>
           <div id="explain-ext-vs-city" class="chart-explanation"></div>
         </div>
