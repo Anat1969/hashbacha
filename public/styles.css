@@ -95,6 +95,17 @@ button:hover,
   background: #bfc4c9;
 }
 
+.btn-upgrade {
+  background: linear-gradient(135deg, #e67e22, #f39c12);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.btn-upgrade:hover {
+  background: linear-gradient(135deg, #d35400, #e67e22);
+}
+
 .btn-sm {
   padding: 0.2rem 0.5rem;
   font-size: 0.78rem;
