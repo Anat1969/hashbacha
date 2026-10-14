@@ -13,11 +13,12 @@ import { BenchmarkLegend } from './Legend.jsx';
 import { ProfitPair } from './ProjectsView.jsx';
 import { NoteComposer, NoteList, formatStamp, isMail, noteDate } from './Notes.jsx';
 import MailLog from './MailLog.jsx';
+import ReviewTab from './review/ReviewTab.jsx';
 
 const F = Object.fromEntries(OPINION_FIELDS.map((f) => [f.key, f]));
 const projectName = (p) => p['שם התכנית'] || p['כתובת הפרויקט'] || 'ללא שם';
 
-export default function ProjectDetail({ ctx, entry }) {
+export default function ProjectDetail({ ctx, entry, tab, reviewId }) {
   const p = entry.project;
   const [editMode, setEditMode] = useState(false);
   const [draft, setDraft] = useState(p);
@@ -36,6 +37,7 @@ export default function ProjectDetail({ ctx, entry }) {
   const latestCityOp = [...entry.opinions].reverse().find((o) => parsePercent(o['רווחיות עירייה (%)']) !== null);
   const notes = (ctx.data.notes || []).filter((n) => n.project_id === p._id);
   const missing = missingReportFields(latest);
+  const reviews = (ctx.data.reviews || []).filter((r) => r.project_id === p._id);
 
   async function saveProject() {
     const res = await ctx.mutate((k) => api.saveProject(k, p._id, draft), 'הפרויקט עודכן');
@@ -112,6 +114,14 @@ export default function ProjectDetail({ ctx, entry }) {
         </div>
       </section>
 
+      <div className="seg-control detail-tabs" role="tablist" aria-label="לשוניות הפרויקט">
+        <a role="tab" aria-selected={tab !== 'review'} className={tab !== 'review' ? 'on' : ''} href={`#/p/${p._id}`}>פרויקט ומעקב</a>
+        <a role="tab" aria-selected={tab === 'review'} className={tab === 'review' ? 'on' : ''} href={`#/p/${p._id}/r`}>
+          שומות השבחה{reviews.length ? <span className="mono tab-count">{reviews.length}</span> : null}
+        </a>
+      </div>
+
+      {tab === 'review' ? <ReviewTab ctx={ctx} entry={entry} reviewId={reviewId} /> : (<>
       <section className={`panel panel-follow${follow ? ' is-open' : ''}`}>
         <div className="panel-head">
           <div>
@@ -255,6 +265,7 @@ export default function ProjectDetail({ ctx, entry }) {
         {fileTab === 'mail' && <NoteList ctx={ctx} notes={notes.filter(isMail).sort((a, b) => noteDate(b) - noteDate(a))} empty="אין עדיין מיילים בתיק." />}
         <MailLog open={mailLogOpen} onClose={() => setMailLogOpen(false)} ctx={ctx} projectId={p._id} />
       </section>
+      </>)}
 
       <AnimatePresence>
         {editMode && (

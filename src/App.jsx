@@ -30,8 +30,8 @@ function writeKey(k) {
 
 function parseRoute() {
   const h = window.location.hash.replace(/^#\/?/, '');
-  const [a, b] = h.split('/');
-  if (a === 'p' && b) return { view: 'project', id: decodeURIComponent(b) };
+  const [a, b, c, d] = h.split('/');
+  if (a === 'p' && b) return { view: 'project', id: decodeURIComponent(b), tab: c === 'r' ? 'review' : null, reviewId: c === 'r' && d ? d : null };
   if (a === 'a') return { view: 'analytics', tab: b || null };
   if (a === 'log') return { view: 'activity' };
   return { view: 'projects' };
@@ -108,6 +108,7 @@ export default function App() {
 
     } catch (e) {
       if (e.forbidden) { logout(); toast('קוד הגישה אינו תקף עוד', 'error'); return null; }
+      if (e.readonly) { toast('לקוד הזה יש הרשאת צפייה בלבד. השינוי לא נשמר.', 'error'); return null; }
       toast('השמירה נכשלה. הנתונים לא השתנו.', 'error');
       return null;
     } finally {
@@ -115,9 +116,13 @@ export default function App() {
     }
   }, [key, load, toast, logout]);
 
+  // Reads that are not part of hb_load (e.g. a full review) use the same code.
+  const query = useCallback((fn) => fn(key), [key]);
+
   const ctx = useMemo(() => ({
-    data, mutate, toast, confirm, busy, reload: () => load(key, true), openMail: setMailRequest
-  }), [data, mutate, toast, confirm, busy, load, key]);
+    data, mutate, query, toast, confirm, busy, reload: () => load(key, true), openMail: setMailRequest,
+    role: data?.me?.role || 'editor'
+  }), [data, mutate, query, toast, confirm, busy, load, key]);
 
   if (!key) {
     return (
@@ -184,7 +189,7 @@ export default function App() {
         {data && (
           <AnimatePresence mode="wait">
             <motion.div
-              key={route.view + (route.id || '') + (route.tab || '')}
+              key={route.view + (route.id || '') + (route.view === 'project' ? '' : (route.tab || ''))}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -192,7 +197,7 @@ export default function App() {
             >
               {route.view === 'projects' && <ProjectsView ctx={ctx} />}
               {route.view === 'project' && (current
-                ? <ProjectDetail ctx={ctx} entry={current} />
+                ? <ProjectDetail ctx={ctx} entry={current} tab={route.tab} reviewId={route.reviewId} />
                 : <NotFound />)}
               {route.view === 'analytics' && <Analytics ctx={ctx} tab={route.tab} />}
               {route.view === 'activity' && <ActivityView ctx={ctx} />}

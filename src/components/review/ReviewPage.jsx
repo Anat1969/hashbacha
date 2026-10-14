@@ -1,0 +1,397 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { api } from '../../lib/api.js';
+import { CHAPTERS, PARAMS, REVIEW_STATUS, SLOTS } from '../../lib/review/rules.js';
+import { compare, fmt, levy, num, summary, tolText } from '../../lib/review/score.js';
+import { parseReport, prepareImport } from '../../lib/review/parse.js';
+import { reviewLetterRequest } from '../../lib/mailRequests.js';
+import { formatStamp } from '../Notes.jsx';
+import { ease } from '../ui.jsx';
+import { ReviewPill } from './ReviewPill.jsx';
+import { readAuthor } from './ReviewTab.jsx';
+
+const MAX_FILE = 2 * 1024 * 1024;
+const CLS_PILL = { good: 'pill-green', bad: 'pill-red', none: 'pill-none' };
+const EVENT_TEXT = {
+  open: () => 'נפתחה בקרה',
+  import: (d) => `נקלט דוח ${SLOTS[d.slot] || ''}${d.file ? ` · ${d.file}` : ''}${d.changed?.length ? ` · ${d.changed.length} ערכים השתנו` : ''}`,
+  ref: (d) => `ערך ייחוס ${d.row}: ${d.N ?? '—'}`,
+  mark: (d) => `${d.row}: ${d.verdict === 'ok' ? '✓ אושר' : d.verdict === 'no' ? '✗ נדחה' : 'הסימון בוטל'}${d.comment ? ` · ${d.comment}` : ''}`,
+  status: (d) => `סטטוס: ${REVIEW_STATUS[d.to]?.label || d.to}`,
+  letter_draft: (d) => `נפתחה טיוטת מכתב הוראות${d.via ? ` (${d.via})` : ''}`,
+  letter_sent: (d) => `מכתב הוראות סומן כנשלח${d.rows ? ` · ${d.rows} שורות` : ''}${d.to ? ` · אל ${d.to}` : ''}`,
+  round_open: (d) => `נפתח סבב ${d.round}`,
+  approve: () => 'הבדיקה אושרה'
+};
+
+async function fileToB64(file) {
+  const buf = await file.arrayBuffer();
+  let bin = ''; const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  let sha = '';
+  try { sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map((b) => b.toString(16).padStart(2, '0')).join(''); } catch { /* insecure context */ }
+  return { buf, b64: btoa(bin), sha };
+}
+
+export default function ReviewPage({ ctx, entry, reviewId }) {
+  const p = entry.project;
+  const [review, setReview] = useState(null);
+  const [error, setError] = useState(false);
+  const [refEdit, setRefEdit] = useState(false);
+  const [refDraft, setRefDraft] = useState({});
+  const [importMsg, setImportMsg] = useState(null);
+  const [author, setAuthor] = useState(readAuthor);
+  const [letterOpened, setLetterOpened] = useState(false);
+  const fileRef = useRef(null);
+  const slotRef = useRef('D');
+
+  const load = useCallback(async () => {
+    try { setReview(await ctx.query((k) => api.reviewGet(k, reviewId))); setError(false); }
+    catch { setError(true); }
+  }, [ctx, reviewId]);
+  useEffect(() => { load(); }, [reviewId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const params = review?.params || {};
+  const marks = review?.marks || {};
+  const rows = useMemo(() => PARAMS.map((r) => ({ r, row: params[r.id] || {}, c: compare(r, params[r.id] || {}), m: marks[r.id] || {} })), [params, marks]);
+  const sum = useMemo(() => summary(params, marks), [params, marks]);
+
+  if (error) {
+    return (
+      <div className="state-card">
+        <h2 className="display-s">הבקרה לא נמצאה</h2>
+        <p>ייתכן שהקישור ישן. אפשר לחזור לרשימת הבקרות של הפרויקט.</p>
+        <a className="btn btn-primary" href={`#/p/${p._id}/r`}>לרשימת הבקרות</a>
+      </div>
+    );
+  }
+  if (!review) return <div className="loading"><div className="skeleton" /><div className="skeleton" /></div>;
+
+  const opinionIndex = entry.opinions.findIndex((o) => o._id === review.opinion_id);
+  const opinion = entry.opinions[opinionIndex] || null;
+  const locked = !!review.superseded_by;
+  const approved = review.status === 'approved';
+  const canWrite = ctx.role !== 'viewer' && !locked && !approved;
+  const files = Object.fromEntries((review.files || []).map((f) => [f.slot, f]));
+  const rejected = rows.filter((x) => x.m.verdict === 'no');
+  const who = () => { const a = author.trim(); try { localStorage.setItem('hashbacha-author', a); } catch { /* storage blocked */ } return a; };
+
+  // Every write: run, refresh the full review (and hb_load through mutate).
+  async function act(fn, okText) {
+    const res = await ctx.mutate(fn, okText);
+    if (res !== null) await load();
+    return res;
+  }
+
+  function pickFile(slot) { slotRef.current = slot; fileRef.current?.click(); }
+
+  async function onFile(e) {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    const slot = slotRef.current;
+    try {
+      if (file.size > MAX_FILE) throw new Error('הקובץ גדול מ־2MB. יש להשתמש בתבנית האחידה בלבד.');
+      const XLSX = await import('xlsx');
+      const { buf, b64, sha } = await fileToB64(file);
+      const wb = XLSX.read(buf, { type: 'array' });
+      const rep = parseReport(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null }));
+      if (rep.slot && rep.slot !== slot) {
+        const go = await ctx.confirm(`בקובץ כתוב "סוג דוח: ${rep.meta['סוג דוח']}", אבל הוא נבחר למשבצת ${SLOTS[slot]}. לקלוט אותו בכל זאת כ${SLOTS[slot]}?`, 'לקלוט');
+        if (!go) return;
+      }
+      const { parsed, warn, filled } = prepareImport(rep, slot, p['שם התכנית']);
+      const meta = { appraiser: rep.meta['שם השמאי'] || '', date: rep.meta['תאריך השומה'] || '', project: rep.meta['שם הפרויקט'] || '' };
+      const res = await act((k) => api.reviewImport(k, review._id, slot, { name: file.name, size: file.size, sha256: sha, content_b64: b64, meta }, parsed, who()), `${SLOTS[slot]}: הדוח נקלט`);
+      if (res !== null) setImportMsg({ ok: true, title: `${SLOTS[slot]} נקלט מהקובץ ${file.name}: ${filled} מתוך 22 שדות הוזנו.`, warn });
+    } catch (err) {
+      setImportMsg({ ok: false, title: 'הקובץ לא נקלט.', warn: [err.message || 'שגיאה בקריאת הקובץ'] });
+    }
+  }
+
+  async function download(f) {
+    try {
+      const res = await ctx.query((k) => api.reviewFile(k, f._id));
+      const a = document.createElement('a');
+      a.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${res.content_b64}`;
+      a.download = res.file_name; a.click();
+    } catch { ctx.toast('ההורדה נכשלה', 'error'); }
+  }
+
+  async function mark(r, verdict, comment) {
+    const cur = marks[r.id] || {};
+    const v = verdict === undefined ? (cur.verdict || null) : (cur.verdict === verdict ? null : verdict);
+    await act((k) => api.reviewMark(k, review._id, r.id, v, comment ?? cur.comment ?? '', who()));
+  }
+
+  function startRef() {
+    setRefDraft(Object.fromEntries(PARAMS.map((r) => [r.id, { N: params[r.id]?.N ?? '', src: params[r.id]?.src ?? '' }])));
+    setRefEdit(true);
+  }
+  const refChanged = refEdit ? PARAMS.filter((r) => String(refDraft[r.id]?.N ?? '') !== String(params[r.id]?.N ?? '') || (refDraft[r.id]?.src ?? '') !== (params[r.id]?.src ?? '')) : [];
+  async function saveRef() {
+    const a = who();
+    const res = await act(async (k) => {
+      for (const r of refChanged) {
+        const raw = String(refDraft[r.id].N).trim();
+        const value = r.type !== 'match' && raw !== '' && Number.isFinite(num(raw)) ? num(raw) : raw;
+        await api.reviewSetRef(k, review._id, r.id, value, refDraft[r.id].src, a);
+      }
+    }, `${refChanged.length} ערכי ייחוס נשמרו`);
+    if (res !== null) setRefEdit(false);
+  }
+
+  function openLetter() {
+    const letterRows = rejected.map(({ r, row, c, m }) => ({
+      chapter: CHAPTERS[r.ch], label: r.label, unit: r.unit,
+      value: row.D === '' || row.D == null ? 'חסר' : fmt(row.D), ref: row.N === '' || row.N == null ? 'לא נקבע' : fmt(row.N), src: row.src,
+      deviation: c.D.txt, tol: tolText(r, row.N), exceed: c.D.label.startsWith('חריגה'), comment: m.comment
+    }));
+    ctx.openMail(reviewLetterRequest({
+      p, opinion, review, rows: letterRows, settings: ctx.data.settings || {},
+      onSent: async (via, draft) => {
+        setLetterOpened({ to: draft.to, rows: letterRows.length });
+        await ctx.mutate((k) => api.reviewStatus(k, review._id, 'letter_draft', { via, to: draft.to, rows: letterRows.length }, who()));
+        await load();
+      }
+    }));
+  }
+
+  async function markSent() {
+    const note = { to: letterOpened?.to || '', rows: rejected.length, date: new Date().toISOString().slice(0, 10) };
+    const res = await act((k) => api.reviewStatus(k, review._id, 'instructions_sent', note, who()), 'סומן: מכתב ההוראות נשלח');
+    if (res !== null) setLetterOpened(false);
+  }
+
+  async function newRound() {
+    const ok = await ctx.confirm('לפתוח סבב חדש לדוח המתוקן? הסבב הנוכחי יינעל לקריאה, וסימונים של שורות שלא ישתנו יעברו לסבב החדש.', 'פתיחת סבב');
+    if (!ok) return;
+    const id = await ctx.mutate((k) => api.reviewNewRound(k, review._id, who()), 'נפתח סבב חדש');
+    if (id && id !== true) window.location.hash = `#/p/${p._id}/r/${id}`;
+  }
+
+  async function approve() {
+    const ok = await ctx.confirm(`לאשר את הבקרה? כל 22 השורות סומנו ✓. אחרי האישור הבקרה נעולה לשינויים.`, 'אישור הבקרה');
+    if (!ok) return;
+    await act((k) => api.reviewApprove(k, review._id, who()), 'הבקרה אושרה');
+  }
+
+  const rounds = review.rounds || [];
+  const status = REVIEW_STATUS[review.status];
+  let lastCh = -1;
+
+  return (
+    <div className="review-page">
+      <section className="panel">
+        <a className="back" href={`#/p/${p._id}/r`}>חזרה לרשימת הבקרות</a>
+        <div className="panel-head">
+          <div>
+            <span className="label">בקרת שומת השבחה · חוות דעת {opinionIndex >= 0 ? opinionIndex + 1 : '—'}{opinion?.['תאריך קבלת בקשה'] ? ` מיום ${opinion['תאריך קבלת בקשה']}` : ''} · סבב {review.round}</span>
+            <h2 className="display-s">השוואת שומות מול עמודת ייחוס</h2>
+            <div className="detail-badges">
+              <ReviewPill review={review} />
+              {locked && <span className="pill pill-none">סבב קודם · לקריאה בלבד</span>}
+              {approved && review.approved_at && <span className="muted">אושר ב־{formatStamp(review.approved_at)}{review.approved_by ? ` · ${review.approved_by}` : ''}</span>}
+            </div>
+          </div>
+          <div className="panel-actions">
+            {rounds.length > 1 && (
+              <div className="seg-control" role="tablist" aria-label="סבבים">
+                {rounds.map((x) => (
+                  <a key={x._id} role="tab" aria-selected={x._id === review._id} className={x._id === review._id ? 'on' : ''} href={`#/p/${p._id}/r/${x._id}`}>סבב {x.round}</a>
+                ))}
+              </div>
+            )}
+            <label className="inline-field">
+              <span className="label">שם הבודק</span>
+              <input className="input input-author" value={author} placeholder="שם" aria-label="שם הבודק" onChange={(e) => setAuthor(e.target.value)} />
+            </label>
+          </div>
+        </div>
+        <p className="hint">{status ? `מצב: ${status.label}. ` : ''}{nextStep(review, sum, rejected.length)}</p>
+
+        <div className="mail-actions review-slots">
+          {['D', 'M', 'N'].map((slot) => {
+            const f = files[slot];
+            return (
+              <div key={slot} className="review-slot">
+                <button className="mail-card" onClick={() => pickFile(slot)} disabled={!canWrite}>
+                  <b>{SLOTS[slot]}{slot === 'N' ? ' (לא חובה)' : ''}</b>
+                  {f ? <span>{f.file_name}{f.meta?.appraiser ? ` · ${f.meta.appraiser}` : ''}{f.meta?.date ? ` · ${f.meta.date}` : ''}</span>
+                    : <span>{slot === 'N' ? 'קובץ ייחוס בתבנית, או הזנה ידנית בטבלה' : 'לא נקלט דוח. לחיצה להעלאת xlsx בתבנית האחידה'}</span>}
+                  {f && canWrite && <span className="label">לחיצה להחלפת הקובץ</span>}
+                </button>
+                {f && <button className="link-btn" onClick={() => download(f)}>הורדת הקובץ</button>}
+              </div>
+            );
+          })}
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={onFile} aria-label="קובץ דוח" />
+        </div>
+
+        <AnimatePresence>
+          {importMsg && (
+            <motion.div className={`import-msg${importMsg.ok ? '' : ' is-error'}`} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease }}>
+              <b>{importMsg.title}</b>
+              {importMsg.warn.length > 0 ? (<><span className="label">{importMsg.warn.length} הערות לבדיקה</span><ul className="insights">{importMsg.warn.map((w) => <li key={w}>{w}</li>)}</ul></>)
+                : <span className="muted">כל השדות הוזנו עם מקור.</span>}
+              <button className="btn btn-sm btn-ghost" onClick={() => setImportMsg(null)}>סגירה</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
+      <section className="panel">
+        <span className="label">סיכום</span>
+        <dl className="summary review-summary">
+          <div><dt className="label">שמאי היזם · קרוב לייחוס</dt><dd className="ok-text">{sum.D.good}</dd></div>
+          <div><dt className="label">שמאי היזם · חריגות</dt><dd className="no-text">{sum.D.exceed}</dd></div>
+          <div><dt className="label">שמאי העירייה · קרוב לייחוס</dt><dd className="ok-text">{sum.M.good}</dd></div>
+          <div><dt className="label">שמאי העירייה · חריגות</dt><dd className="no-text">{sum.M.exceed}</dd></div>
+          <div><dt className="label">בקרה · אושרו ✓</dt><dd className="ok-text">{sum.ok}</dd></div>
+          <div><dt className="label">בקרה · נדחו ✗</dt><dd className="no-text">{sum.no}</dd></div>
+          <div><dt className="label">בקרה · ממתינים</dt><dd>{sum.pending}</dd></div>
+        </dl>
+        <p className="levy-line">
+          <span className="label">היטל נגזר (השבחה × שיעור היטל), ₪ מיליון · לא נכלל בציון</span>
+          {['D', 'N', 'M'].map((k) => <span key={k}><span className="role">{SLOTS[k]}:</span> <b className="mono">{levy(params, k) === null ? '—' : fmt(levy(params, k))}</b></span>)}
+        </p>
+        <div className="legend review-legend" role="note">
+          <span className="legend-item"><i className="dot dot-green" />קרוב יותר לייחוס, או בטווח הקביל</span>
+          <span className="legend-item"><i className="dot dot-red" />רחוק יותר, או חריגה מהטווח</span>
+          <span className="legend-item"><i className="dot dot-none" />חסר ערך או אין ייחוס</span>
+          <span className="legend-item muted">הסרגל: הקו האמצעי הוא ערך הייחוס, והנקודה היא ערך השמאי</span>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="label">22 פרמטרים ב־7 פרקים · כל שורה מסומנת ✓ או ✗ עם הערה</span>
+            <h2 className="display-s">טבלת ההשוואה</h2>
+          </div>
+          <div className="panel-actions">
+            {canWrite && !refEdit && <button className="btn btn-ghost" onClick={startRef}>עריכת ערכי ייחוס</button>}
+            <button className="btn btn-ghost" onClick={openLetter} disabled={!rejected.length || !canWrite}>מכתב הוראות ({rejected.length})</button>
+            {letterOpened && canWrite && <button className="btn btn-primary" onClick={markSent}>סימון: המכתב נשלח</button>}
+            {review.status === 'instructions_sent' && canWrite && <button className="btn btn-ghost" onClick={newRound}>סבב חדש לדוח מתוקן</button>}
+            <button className="btn btn-primary" onClick={approve} disabled={!canWrite || sum.ok !== 22}>אישור הבקרה</button>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="table table-review">
+            <thead>
+              <tr>
+                <th>פרמטר</th>
+                <th>שמאי היזם</th>
+                <th>ייחוס ומקור</th>
+                <th>שמאי העירייה</th>
+                <th>טווח קביל</th>
+                <th>בקרה</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ r, row, c, m }) => {
+                const head = r.ch !== lastCh ? (lastCh = r.ch, true) : false;
+                return (
+                  <React.Fragment key={r.id}>
+                    {head && <tr className="group-row"><td colSpan={6}><span className="group-label">{CHAPTERS[r.ch]}</span></td></tr>}
+                    <tr className={`row${refEdit ? ' row-edit' : ''}`} data-row={r.id}>
+                      <td data-label="פרמטר"><span className="project-name">{r.label}</span><span className="project-sub">{r.unit} · <span className="mono">{r.id}</span></span></td>
+                      <td data-label="שמאי היזם"><SideCell v={row.D} note={row.Dnote} s={c.D} /></td>
+                      <td data-label="ייחוס ומקור">
+                        {refEdit ? (
+                          <div className="ref-edit">
+                            <input className="input input-cell" dir="ltr" aria-label={`ייחוס ${r.label}`} value={refDraft[r.id]?.N ?? ''} onChange={(e) => setRefDraft({ ...refDraft, [r.id]: { ...refDraft[r.id], N: e.target.value } })} />
+                            <input className="input input-cell" aria-label={`מקור ${r.label}`} placeholder="מקור" value={refDraft[r.id]?.src ?? ''} onChange={(e) => setRefDraft({ ...refDraft, [r.id]: { ...refDraft[r.id], src: e.target.value } })} />
+                          </div>
+                        ) : (
+                          <div className="ref-cell"><b className="mono">{row.N === '' || row.N == null ? '—' : fmt(row.N)}</b><span className="hint">{row.src || 'ללא מקור'}</span></div>
+                        )}
+                      </td>
+                      <td data-label="שמאי העירייה"><SideCell v={row.M} note={row.Mnote} s={c.M} /></td>
+                      <td data-label="טווח קביל" className="mono tol-cell">{tolText(r, row.N)}</td>
+                      <td data-label="בקרה"><MarkCell m={m} canWrite={canWrite} onMark={(v, comment) => mark(r, v, comment)} label={r.label} /></td>
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel">
+        <span className="label">יומן הבקרה · מהחדש לישן</span>
+        {!(review.events || []).length ? <p className="muted">אין עדיין אירועים.</p> : (
+          <ol className="file-timeline">
+            {review.events.map((ev, i) => (
+              <li key={i} className={`ft ft-${ev.kind === 'mark' || ev.kind === 'ref' ? 'note' : ev.kind.startsWith('letter') ? 'mail_out' : 'event'}`}>
+                <span className="ft-date mono">{formatStamp(ev.at)}</span>
+                <span className="ft-who">{ev.actor || 'ללא שם'}</span>
+                <span className="ft-text">{(EVENT_TEXT[ev.kind] || (() => ev.kind))(ev.detail || {})}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <AnimatePresence>
+        {refEdit && (
+          <motion.div className="editbar" initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} transition={{ duration: 0.4, ease }} role="region" aria-label="סרגל עריכה">
+            <span className="editbar-state"><span className={`sync-dot${refChanged.length ? ' on' : ''}`} />{refChanged.length ? `${refChanged.length} ערכי ייחוס שונו` : 'עריכת ייחוס · אין שינויים'}</span>
+            <button className="btn btn-primary" onClick={saveRef} disabled={!refChanged.length}>שמור ערכי ייחוס</button>
+            <button className="btn btn-ghost btn-on-dark" onClick={() => setRefEdit(false)}>ביטול</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function nextStep(review, sum, rejected) {
+  if (review.superseded_by) return 'זהו סבב קודם. הבדיקה ממשיכה בסבב החדש.';
+  switch (review.status) {
+    case 'waiting_for_reports': return 'הצעד הבא: לקלוט את דוח שמאי היזם ואת דוח שמאי העירייה.';
+    case 'reports_imported': return 'הצעד הבא: לקבוע ערכי ייחוס עם מקור, ולסמן ✓ או ✗ בכל שורה.';
+    case 'in_review': return rejected ? `הצעד הבא: ${sum.pending ? `לסמן עוד ${sum.pending} שורות, ואז ` : ''}לשלוח מכתב הוראות על ${rejected} שורות ✗.` : sum.pending ? `נותרו ${sum.pending} שורות לסימון.` : 'כל השורות ✓. אפשר לאשר את הבקרה.';
+    case 'instructions_sent': return 'ההוראות נשלחו. כשמגיע דוח מתוקן: "סבב חדש לדוח מתוקן", ואז קליטת הדוח.';
+    case 'revised_report_received': return 'התקבל דוח מתוקן. שורות שערכן השתנה חזרו לסימון.';
+    case 'approved': return 'הבקרה אושרה ונעולה לשינויים.';
+    default: return '';
+  }
+}
+
+function SideCell({ v, note, s }) {
+  const has = !(v === '' || v == null);
+  return (
+    <div className={`side-cell side-${s.cls}`}>
+      <span className="side-top">
+        <b className="mono">{has ? fmt(v) : '—'}</b>
+        {s.label && <span className={`pill ${CLS_PILL[s.cls]}`}>{s.label}</span>}
+      </span>
+      {s.txt && <span className="hint">{s.txt}</span>}
+      {s.pos != null && (
+        <span className="pair-track side-scale" aria-hidden="true">
+          <span className="pair-mark" />
+          <span className="side-dot" style={{ insetInlineStart: `${s.pos}%` }} />
+        </span>
+      )}
+      {note && <span className="side-note">{note}</span>}
+    </div>
+  );
+}
+
+function MarkCell({ m, canWrite, onMark, label }) {
+  const [comment, setComment] = useState(m.comment || '');
+  useEffect(() => { setComment(m.comment || ''); }, [m.comment]);
+  return (
+    <div className="mark-cell">
+      <div className="row-actions">
+        <button className={`btn btn-sm btn-ghost mark-ok${m.verdict === 'ok' ? ' on' : ''}`} aria-pressed={m.verdict === 'ok'} aria-label={`אישור ${label}`} disabled={!canWrite} onClick={() => onMark('ok', comment)}>✓ אישור</button>
+        <button className={`btn btn-sm btn-ghost mark-no${m.verdict === 'no' ? ' on' : ''}`} aria-pressed={m.verdict === 'no'} aria-label={`דחייה ${label}`} disabled={!canWrite} onClick={() => onMark('no', comment)}>✗ דחייה</button>
+      </div>
+      <textarea className="input" rows={2} placeholder="הערה" aria-label={`הערה ${label}`} value={comment} readOnly={!canWrite}
+        onChange={(e) => setComment(e.target.value)} onBlur={() => { if (canWrite && comment !== (m.comment || '')) onMark(undefined, comment); }} />
+      <span className="label">{m.marked_at ? `עודכן ${formatStamp(m.marked_at)}${m.reviewer ? ` · ${m.reviewer}` : ''}${m.carried_from ? ' · הועבר מסבב קודם' : ''}` : 'טרם נבדק'}</span>
+    </div>
+  );
+}

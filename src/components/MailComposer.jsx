@@ -54,6 +54,7 @@ export default function MailComposer({ request, onClose, ctx }) {
   async function send(kind) {
     await rememberContact();
     await fileSent(kind);
+    if (request.onSent) await request.onSent(kind, draft);
     ctx.toast(kind === 'copy' ? 'נוסח המייל הועתק ותויק בתיק הפרויקט' : 'המייל נפתח לשליחה ותויק בתיק הפרויקט', 'ok');
     onClose();
   }
