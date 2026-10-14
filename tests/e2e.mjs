@@ -551,13 +551,26 @@ try {
   await page.goto(`${BASE}/?k=${KEY}#/guide`);
   await page.waitForSelector('.guide-section');
   ok(await page.isVisible('.nav-link.active:has-text("מדריך")'), 'main menu has "מדריך"');
-  for (const t of ['חזון ומטרה', 'המסלול בשישה צעדים', 'קלט ופלט', 'הלוגיקה של בקרת השומה', 'איך מתבצעת התקשורת', 'מי עושה מה', 'איך הכול מתחבר', 'צעדים ראשונים']) {
-    ok(await page.isVisible(`.guide-section h2:has-text("${t}")`), `guide section: ${t}`);
+  ok((await page.locator('.guide-section').count()) === 1 && await page.isVisible('.guide-section h2:has-text("חזון ומטרה")'), 'guide shows one chapter at a time, starting with vision');
+  ok((await page.locator('.guide-tabs a[role=tab]').count()) === 8, 'eight fixed chapter tabs');
+  const chapters = [['flow', 'המסלול בשישה צעדים'], ['io', 'קלט ופלט'], ['logic', 'הלוגיקה של בקרת השומה'], ['comm', 'איך מתבצעת התקשורת'], ['roles', 'מי עושה מה'], ['connect', 'איך הכול מתחבר'], ['start', 'צעדים ראשונים']];
+  for (const [id, t] of chapters) {
+    await page.click(`.guide-tabs a[href="#/guide/${id}"]`);
+    await page.waitForSelector(`.guide-section h2:has-text("${t}")`);
+    ok((await page.locator('.guide-section').count()) === 1 && (await page.getAttribute(`.guide-tabs a[href="#/guide/${id}"]`, 'aria-selected')) === 'true', `chapter tab: ${t}`);
   }
+  await page.click('.guide-tabs a[href="#/guide/flow"]');
+  await page.waitForSelector('.guide-flow');
   ok((await page.locator('.guide-flow li').count()) === 6, 'guide: six-step flow');
-  await page.click('.guide-toc button:has-text("מי עושה מה")');
-  await page.waitForTimeout(800);
-  ok(await page.evaluate(() => document.getElementById('guide-roles').getBoundingClientRect().top < 300), 'table of contents scrolls to the section');
+  await page.mouse.wheel(0, 900);
+  await page.waitForTimeout(400);
+  ok(await page.evaluate(() => { const r = document.querySelector('.guide-tabs').getBoundingClientRect(); return r.top >= 0 && r.bottom < window.innerHeight; }), 'chapter tabs stay visible while scrolling');
+  await page.click('.guide-pager a:has-text("לפרק הבא")');
+  await page.waitForSelector('.guide-section h2:has-text("קלט ופלט")');
+  ok(true, '"לפרק הבא" moves to the next chapter');
+  await page.goto(`${BASE}/#/guide/comm`);
+  await page.waitForSelector('.guide-section h2:has-text("איך מתבצעת התקשורת")');
+  ok(page.url().endsWith('#/guide/comm'), 'direct link opens a chapter');
   await page.screenshot({ path: `${SHOTS}/g1-guide.png`, fullPage: true });
   const anon = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'he-IL' });
   const ap = await anon.newPage();
@@ -739,7 +752,7 @@ try {
   await m.page.click('.modal button:has-text("ביטול")');
   await m.page.click('button:has-text("חוות דעת חדשה")');
   await noHorizontalScroll(m.page, 'new opinion form');
-  for (const path of ['#/s', '#/guide', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
+  for (const path of ['#/s', '#/guide', '#/guide/roles', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
     await m.page.goto(`${BASE}/${path}`);
     await m.page.waitForTimeout(900);
     await noHorizontalScroll(m.page, path);

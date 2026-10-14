@@ -37,7 +37,7 @@ function parseRoute() {
   if (a === 'a') return { view: 'analytics', tab: b || null };
   if (a === 'log') return { view: 'activity' };
   if (a === 's') return { view: 'reviews' };
-  if (a === 'guide') return { view: 'guide' };
+  if (a === 'guide') return { view: 'guide', tab: b || null };
   return { view: 'projects' };
 }
 
@@ -135,7 +135,7 @@ export default function App() {
     return (
       <div className="app">
         <div className="backdrop" aria-hidden="true"><div className="grid-plane" /><div className="glow glow-a" /><div className="glow glow-b" /></div>
-        <main className="main"><Guide standalone /></main>
+        <main className="main"><Guide standalone tab={route.tab} /></main>
       </div>
     );
   }
@@ -208,7 +208,7 @@ export default function App() {
         {data && (
           <AnimatePresence mode="wait">
             <motion.div
-              key={route.view + (route.id || '') + (route.view === 'project' ? '' : (route.tab || ''))}
+              key={route.view + (route.id || '') + (route.view === 'project' || route.view === 'guide' ? '' : (route.tab || ''))}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -221,7 +221,7 @@ export default function App() {
               {route.view === 'analytics' && <Analytics ctx={ctx} tab={route.tab} />}
               {route.view === 'activity' && <ActivityView ctx={ctx} />}
               {route.view === 'reviews' && <ReviewsView ctx={ctx} />}
-              {route.view === 'guide' && <Guide />}
+              {route.view === 'guide' && <Guide tab={route.tab} />}
             </motion.div>
           </AnimatePresence>
         )}
