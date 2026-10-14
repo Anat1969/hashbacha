@@ -73,9 +73,9 @@ export default function SettingsModal({ open, onClose, ctx, onLogout }) {
 
       <section className="settings-block">
         <h3 className="settings-title">פרויקט המחקר ב־Claude</h3>
-        <p className="hint">הקישור לפרויקט ב־Claude שבו נעשו המחקר והכללים של בקרת השומות. בלשונית "שומות השבחה" יופיע כפתור שפותח אותו.</p>
+        <p className="hint">הקישור לשיחה או לפרויקט ב־Claude שבו נעשו המחקר והכללים של בקרת השומות. בלשונית "בקרת שומות" ובעמוד ההשוואה יש כפתור שפותח אותו.</p>
         <Field label="קישור לפרויקט ב־Claude">
-          <input className="input" dir="ltr" type="url" value={form.researchUrl || ''} placeholder="https://claude.ai/project/..."
+          <input className="input" dir="ltr" type="url" value={form.researchUrl || ''} placeholder="https://claude.ai/..."
             onChange={(e) => setForm({ ...form, researchUrl: e.target.value })} />
         </Field>
       </section>
@@ -123,7 +123,7 @@ export default function SettingsModal({ open, onClose, ctx, onLogout }) {
       {link && (
         <section className="settings-block share">
           <h3 className="settings-title">קישור כניסה לשיתוף</h3>
-          <p className="hint">מי שפותח את הקישור נכנס מיד, בלי להקליד קוד. לשלוח רק לצוות, כי הקישור נותן גישה מלאה לנתונים.</p>
+          <p className="hint">מי שפותח את הקישור נכנס מיד, בלי להקליד קוד, עם אותה הרשאה כמו שלך ({ctx.role === 'editor' ? 'עריכה' : ctx.role === 'reviewer' ? 'בודק' : 'צפייה'}). לשלוח רק לצוות.</p>
           <div className="share-row">
             <input className="input mono" dir="ltr" readOnly value={link} aria-label="קישור כניסה" onFocus={(e) => e.target.select()} />
             <button className="btn btn-ghost" onClick={copyLink}>{copied ? 'הועתק' : 'העתק'}</button>

@@ -31,7 +31,7 @@ export default function MailComposer({ request, onClose, ctx }) {
   }
 
   async function rememberContact() {
-    if (!offerSave || !saveContact) return;
+    if (!offerSave || !saveContact || ctx.role !== 'editor') return;
     const settings = ctx.data.settings || {};
     const contacts = [...(settings.contacts || []).filter((c) => c.name !== contactName),
       { name: contactName, role: request.contactRole || 'אחר', email: draft.to }];
