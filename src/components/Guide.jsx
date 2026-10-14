@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ease } from './ui.jsx';
 import { CHAPTERS, PARAMS, REVIEW_STATUS } from '../lib/review/rules.js';
@@ -72,26 +72,46 @@ const GLOSSARY = [
   ['היטל נגזר', 'השבחה × שיעור היטל ÷ 100, בכל עמודה. מוצג לצורך השוואה ואינו חלק מהציון.']
 ];
 
-function Section({ id, label, title, children, i = 0 }) {
+// One chapter at a time: the chapter bar stays put and only the text below it changes.
+const TabContext = createContext('vision');
+const tabHref = (id) => `#/guide/${id}`;
+
+function Section({ id, label, title, children }) {
+  const cur = useContext(TabContext);
+  if (cur !== id) return null;
+  const i = SECTIONS.findIndex(([x]) => x === id);
+  const prev = SECTIONS[i - 1]; const next = SECTIONS[i + 1];
   return (
-    <motion.section id={`guide-${id}`} className="panel guide-section" initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-40px' }} transition={{ duration: 0.45, ease, delay: i * 0.03 }}>
+    <motion.section id={`guide-${id}`} role="tabpanel" className="panel guide-section" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease }}>
       <div className="panel-head">
         <div>
-          <span className="label">{label}</span>
+          <span className="label">פרק {String(i + 1).padStart(2, '0')} מתוך {String(SECTIONS.length).padStart(2, '0')} · {label}</span>
           <h2 className="display-s">{title}</h2>
         </div>
       </div>
       {children}
+      <div className="guide-pager">
+        {prev ? <a className="btn btn-ghost" href={tabHref(prev[0])}>לפרק הקודם: {prev[1]}</a> : <span />}
+        {next && <a className="btn btn-ghost" href={tabHref(next[0])}>לפרק הבא: {next[1]}</a>}
+      </div>
     </motion.section>
   );
 }
 
-const go = (id) => document.getElementById(`guide-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-export default function Guide({ standalone = false }) {
+export default function Guide({ standalone = false, tab }) {
+  const cur = SECTIONS.some(([id]) => id === tab) ? tab : SECTIONS[0][0];
+  // The chapter bar sticks just under the app header, whose height changes with screen width.
+  const [stickTop, setStickTop] = useState(standalone ? 12 : 76);
+  useEffect(() => {
+    if (standalone) return undefined;
+    const measure = () => { const h = document.querySelector('.topbar')?.getBoundingClientRect().height; if (h) setStickTop(Math.round(h) + 6); };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [standalone]);
   const statusFlow = ['waiting_for_reports', 'reports_imported', 'in_review', 'instructions_sent', 'revised_report_received', 'approved'];
   return (
-    <div className="page guide">
+    <div className={`page guide${standalone ? ' guide-standalone' : ''}`}>
       <section className="hero hero-compact">
         <div className="hero-text">
           <span className="label">מדריך למשתמש · אגף השבחה, עיריית אשדוד</span>
@@ -104,9 +124,15 @@ export default function Guide({ standalone = false }) {
         </div>
       </section>
 
-      <nav className="chips guide-toc" aria-label="תוכן המדריך">
-        {SECTIONS.map(([id, l], i) => <button key={id} className="chip-btn" onClick={() => go(id)}><span className="mono">{String(i + 1).padStart(2, '0')}</span> {l}</button>)}
+      <nav className="seg-control guide-tabs" role="tablist" aria-label="פרקי המדריך" style={{ top: stickTop }}>
+        {SECTIONS.map(([id, l], i) => (
+          <a key={id} role="tab" aria-selected={cur === id} className={cur === id ? 'on' : ''} href={tabHref(id)}>
+            <span className="mono">{String(i + 1).padStart(2, '0')}</span> {l}
+          </a>
+        ))}
       </nav>
+
+      <TabContext.Provider value={cur}>
 
       <Section id="vision" label="למה האפליקציה קיימת" title="חזון ומטרה">
         <div className="insight-grid">
@@ -237,6 +263,7 @@ export default function Guide({ standalone = false }) {
         <span className="label">מונחים</span>
         <dl className="guide-list">{GLOSSARY.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
       </Section>
+      </TabContext.Provider>
     </div>
   );
 }
