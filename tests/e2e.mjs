@@ -669,6 +669,8 @@ try {
   await m.page.reload();
   await m.page.waitForSelector('.table-review');
   ok(await m.page.locator('.table-review button.mark-ok').first().isDisabled(), 'viewer code: marking disabled');
+  ok(await m.page.isVisible('.role-pill:has-text("צפייה בלבד")'), 'viewer code: header says view only');
+  await noHorizontalScroll(m.page, 'viewer header');
   db.role = 'editor';
   await m.page.goto(`${BASE}/#/p/${rpid}`);
   await m.page.reload();
