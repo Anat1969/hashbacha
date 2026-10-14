@@ -37,7 +37,7 @@
 
 ## Testing
 
-`npm run build && npm test` (17 review-logic checks + 154 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (20 review-logic checks + 162 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
 ## Design rule for the appraisal review module
