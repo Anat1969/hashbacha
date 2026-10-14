@@ -37,7 +37,7 @@
 
 ## Testing
 
-`npm run build && npm test` (20 review-logic checks + 162 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (20 review-logic checks + 164 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
 ## Design rule for the appraisal review module
@@ -83,4 +83,5 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 - Main menu item "בקרת שומות" (`#/s`) lists every opinion with its review status. It is also a tab inside the project card, not a separate page: project card tabs "פרויקט ומעקב" / "שומות השבחה" (`#/p/:id/r`, `#/p/:id/r/:reviewId`).
 - Logic: `src/lib/review/`. UI: `src/components/review/`. The comparison reuses table / group-row / pill / mail-card / summary / file-timeline / editbar.
 - The Claude research project for this module opens from a button in the review tab; its URL lives in Settings (`hb_settings.data.researchUrl`).
+- Codes (2026-10-14): Anat Shtibelman, city architect = editor (existing code); Ilanit Zohar, betterment manager = reviewer; everyone else = one shared viewer code. Codes are only stored hashed; hand each person an entry link in Chrome form.
 - Roles per access code (`hb_access_keys.role`): editor (all), reviewer (review writes only), viewer (read). Viewer writes raise `hb_readonly` (toast, no logout).

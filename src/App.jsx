@@ -174,6 +174,11 @@ export default function App() {
               </motion.span>
             )}
           </AnimatePresence>
+          {ctx.role !== 'editor' && data && (
+            <span className="pill pill-none role-pill" title={ctx.role === 'reviewer' ? 'אפשר לבדוק שומות, לסמן ולשלוח מכתבי הוראות. עריכת פרויקטים שמורה לעורכים.' : 'אפשר לצפות בכל הנתונים. שינויים שמורים לעורכים ולבודקים.'}>
+              {ctx.role === 'reviewer' ? 'הרשאת בודק' : 'צפייה בלבד'}
+            </span>
+          )}
           <InstallButton />
           <a className="btn btn-ghost btn-claude" href={CLAUDE_CODE_URL} target="_blank" rel="noreferrer" title="פתיחת שיחת הפיתוח ב־Claude Code להמשך עריכה ושדרוג">עריכה ושדרוג ב־Claude</a>
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)}>הגדרות</button>
