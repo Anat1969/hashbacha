@@ -22,24 +22,27 @@ export function parseReport(rows) {
   return { meta, vals, slot: KIND[meta['סוג דוח']] || null };
 }
 
-// Cleans the values for one slot and lists what needs a second look.
+// Warning kinds shown in the import summary.
+export const WARN_KINDS = { project: 'שם פרויקט שונה', missing: 'חסר ערך', nonnumeric: 'ערך שאינו מספר', nosource: 'ללא מקור או הסבר' };
+
+// Cleans the values for one slot and lists what needs a second look: [{ kind, text }].
 export function prepareImport({ meta, vals }, slot, projectName) {
   const parsed = {}; const warn = []; let filled = 0;
   for (const r of PARAMS) {
     const x = vals[r.id];
-    if (!x || x.v == null || norm(x.v) === '') { warn.push(`${r.label}: חסר ערך`); parsed[r.id] = { v: '', note: '' }; continue; }
+    if (!x || x.v == null || norm(x.v) === '') { warn.push({ kind: 'missing', text: `${r.label} (${r.id}): חסר ערך` }); parsed[r.id] = { v: '', note: '' }; continue; }
     let v;
     if (r.type !== 'match') {
       const n = num(x.v);
-      if (!Number.isFinite(n)) { warn.push(`${r.label}: "${norm(x.v)}" אינו מספר`); parsed[r.id] = { v: '', note: x.note }; continue; }
+      if (!Number.isFinite(n)) { warn.push({ kind: 'nonnumeric', text: `${r.label} (${r.id}): "${norm(x.v)}" אינו מספר` }); parsed[r.id] = { v: '', note: x.note }; continue; }
       v = n;
     } else v = norm(x.v);
-    if (slot !== 'N' && !x.note) warn.push(`${r.label}: ללא מקור או הסבר`);
+    if (slot !== 'N' && !x.note) warn.push({ kind: 'nosource', text: `${r.label} (${r.id}): ללא מקור או הסבר` });
     parsed[r.id] = { v, note: x.note };
     filled++;
   }
   if (meta['שם הפרויקט'] && projectName && norm(meta['שם הפרויקט']) !== norm(projectName)) {
-    warn.unshift(`שם הפרויקט בקובץ ("${meta['שם הפרויקט']}") שונה מהפרויקט. כדאי לוודא שהקובץ שייך לפרויקט הזה.`);
+    warn.unshift({ kind: 'project', text: `שם הפרויקט בקובץ ("${meta['שם הפרויקט']}") שונה מהפרויקט "${projectName}". כדאי לוודא שהקובץ שייך לפרויקט הזה.` });
   }
   return { parsed, warn, filled };
 }

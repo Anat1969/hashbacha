@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import * as XLSX from 'xlsx';
 import { PARAMS } from '../src/lib/review/rules.js';
 import { compare, summary, levy, assess } from '../src/lib/review/score.js';
-import { parseReport, prepareImport } from '../src/lib/review/parse.js';
+import { parseReport, prepareImport, WARN_KINDS } from '../src/lib/review/parse.js';
+import vm from 'node:vm';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.log('  ✗ ' + m); } };
@@ -38,6 +39,30 @@ const s = summary(params, { r1: { verdict: 'ok' }, r2: { verdict: 'no' } });
 ok(s.ok === 1 && s.no === 1 && s.pending === 20, 'review progress counts');
 ok(s.D.good + s.M.good > 0 && s.D.exceed >= 0, `sample summary D ${s.D.good}/${s.D.exceed}, M ${s.M.good}/${s.M.exceed}`);
 ok(levy(params, 'N') === Math.round(params.r22.N * 25) / 100, `derived levy N = ${levy(params, 'N')}`);
+
+// Exact port: run the reference page's own assess/compare next to ours on the same rows.
+const html = readFileSync('docs/hashbacha/reference/index.html', 'utf8');
+const src = html.slice(html.indexOf('const num='), html.indexOf('const esc=')) + html.slice(html.indexOf('function assess('), html.indexOf('function sideCell('));
+const refCtx = {}; vm.runInNewContext(src + ';this.assess=assess;this.compare=compare;', refCtx);
+const pick = (x) => JSON.stringify({ D: { ...x.D }, M: { ...x.M } });
+let same = 0, diff = [];
+const trial = (r, row) => { const a = pick(refCtx.compare({ ...r, ...row })); const b = pick(compare(r, row)); if (a === b) same++; else diff.push([r.id, row, a, b]); };
+PARAMS.forEach((r) => trial(r, params[r.id]));
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (let i = 0; i < 600; i++) {
+  const r = PARAMS[i % 22];
+  const N = r.type === 'match' ? ['א', 'ב'][i % 2] : Math.round(rnd() * 1000) / 10;
+  const v = () => (rnd() < 0.08 ? '' : r.type === 'match' ? ['א', 'ב', ' א '][Math.floor(rnd() * 3)] : Math.round((N || 1) * (0.6 + rnd() * 0.8) * 100) / 100);
+  trial(r, { N: rnd() < 0.05 ? '' : N, D: v(), M: v() });
+}
+ok(diff.length === 0, `compare()/assess() identical to reference/index.html on ${same} rows${diff.length ? ' · first diff ' + JSON.stringify(diff[0]) : ''}`);
+
+// Import warnings by kind.
+const bad = [['סוג דוח', 'יזם'], ['שם הפרויקט', 'פרויקט אחר'], ['קוד', 'פרק', 'פרמטר', 'יחידה', 'ערך', 'מקור / הסבר'], ['r1', '', '', '', '12.03.2025', 'x'], ['r4', '', '', '', 'אלף', 'x'], ['r5', '', '', '', 19000, '']];
+const w = prepareImport(parseReport(bad), 'D', 'מתחם הדקל').warn;
+const kinds = (k) => w.filter((x) => x.kind === k).length;
+ok(kinds('project') === 1 && kinds('nonnumeric') === 1 && kinds('nosource') === 1 && kinds('missing') === 19, `warning kinds: project / non-numeric / no source / missing (${Object.keys(WARN_KINDS).map((k) => k + '=' + kinds(k)).join(', ')})`);
+ok(parseReport(bad).slot === 'D' && parseReport([['קוד', 'ערך']]).slot === null, '"סוג דוח" routes the file; missing cell → no slot');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
