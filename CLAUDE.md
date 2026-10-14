@@ -38,6 +38,14 @@
 `npm run build && npm test` (115 checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
+## Design rule for the appraisal review module
+- All new screens must look exactly like the existing app: same components, layout shell, navigation, colors, fonts, spacing, buttons, tables, forms, badges and empty states.
+- Reuse existing components and design tokens. Do not create new styles when an equivalent exists.
+- docs/hashbacha/index.html is a reference for LOGIC ONLY (parsing, scoring, data structure). Ignore its CSS, fonts, colors and layout.
+- Status colors (green = closer / in range, red = farther / exceedance) must come from the app's existing success and danger tokens.
+- Hebrew, RTL, no icons, consistent with the rest of the app.
+- Token reference: success = `--green`, danger = `--red` (`src/styles.css` `:root`); gradients via `profitColor` / `gapColor` in `src/lib/calc.js`.
+
 ## Design language
 
 Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM Plex Mono labels, layered panels with shadows, perspective grid backdrop, motion on entry. Running text ≥ 4.5:1 contrast.
