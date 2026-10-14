@@ -38,9 +38,23 @@ export default function MailComposer({ request, onClose, ctx }) {
     await ctx.mutate((k) => api.saveSettings(k, { ...settings, contacts }));
   }
 
+  // Every mail that leaves the app is filed to the project history (or the general journal).
+  async function fileSent(via) {
+    let author = '';
+    try { author = localStorage.getItem('hashbacha-author') || ''; } catch { /* storage blocked */ }
+    await ctx.mutate((k) => api.saveNote(k, null, {
+      kind: 'mail_out',
+      body: draft.text,
+      author,
+      project_id: request.projectId || null,
+      meta: { direction: 'out', to: draft.to, subject: draft.subject, via, title: draft.title, date: new Date().toISOString().slice(0, 10) }
+    }));
+  }
+
   async function send(kind) {
     await rememberContact();
-    ctx.toast(kind === 'copy' ? 'נוסח המייל הועתק' : 'המייל נפתח לשליחה', 'ok');
+    await fileSent(kind);
+    ctx.toast(kind === 'copy' ? 'נוסח המייל הועתק ותויק בתיק הפרויקט' : 'המייל נפתח לשליחה ותויק בתיק הפרויקט', 'ok');
     onClose();
   }
 

@@ -381,7 +381,7 @@ function Overview({ stats }) {
   const tiles = [
     { label: 'פרויקטים', value: stats.projects },
     { label: 'חוות דעת', value: stats.opinions },
-    { label: `רווחיות יזם ממוצעת · בנצ'מרק ${PROFIT_THRESHOLD}%`, value: stats.avgDev !== null ? stats.avgDev.toFixed(1) + '%' : '—', color: profitColor(stats.avgDev) },
+    { label: `ממוצע רווחיות יזם · ${stats.devCount} חוו״ד עם נתון · בנצ'מרק ${PROFIT_THRESHOLD}%`, value: stats.avgDev !== null ? stats.avgDev.toFixed(1) + '%' : '—', color: profitColor(stats.avgDev) },
     { label: 'ממתינים לעירייה / ליזם', value: `${cityWait} / ${stats.open.length - cityWait}` },
     { label: 'זמן טיפול חציוני', value: stats.medianTurn !== null ? formatDuration(stats.medianTurn) : '—', small: true }
   ];
@@ -483,6 +483,14 @@ function OpinionStrip({ entry }) {
   return (
     <div className="strip">
       {ops.length === 0 && <p className="muted">אין עדיין חוות דעת לפרויקט זה.</p>}
+      {ops.length > 0 && (
+        <p className="strip-key">
+          <span className="label">מקרא</span> כל נקודה היא חוות דעת, מהראשונה (למעלה) לאחרונה. צבע הנקודה: רווחיות היזם ביחס לבנצ'מרק,
+          <i className="key-dot" style={{ borderColor: profitColor(10) }} /> ירוק מתחת ל־15%,
+          <i className="key-dot" style={{ borderColor: profitColor(20) }} /> אדום מעל,
+          <i className="key-dot" style={{ borderColor: 'var(--ink-4)' }} /> אפור ללא נתון.
+        </p>
+      )}
       <ol className="timeline">
         {ops.map((o, i) => {
           const dev = parsePercent(o['רווחיות יזם (%)']);

@@ -3,6 +3,8 @@ import { Modal, Field } from './ui.jsx';
 import { api } from '../lib/api.js';
 import { KEY_STORAGE } from '../lib/config.js';
 import { CONTACT_ROLES } from '../lib/fields.js';
+import { InstallButton } from './ChromeBar.jsx';
+import { browserName, downloadLauncher, isChrome, platform } from '../lib/browser.js';
 
 function entryLink() {
   let k = '';
@@ -87,6 +89,25 @@ export default function SettingsModal({ open, onClose, ctx, onLogout }) {
             </div>
           ))}
           <button className="btn btn-sm btn-ghost" onClick={addContact}>הוספת איש קשר</button>
+        </div>
+      </section>
+
+      <section className="settings-block">
+        <h3 className="settings-title">פתיחה תמיד בגוגל כרום</h3>
+        <p className="hint">
+          אתר לא יכול לבחור לבד באיזה דפדפן ייפתח: קישור נפתח בדפדפן שמוגדר כברירת מחדל במחשב. יש שתי דרכים לוודא שהאפליקציה תמיד בכרום:
+        </p>
+        <ol className="steps">
+          <li><b>התקנה כאפליקציה (מומלץ):</b> פותחים פעם אחת בכרום ולוחצים "התקנה כאפליקציה בכרום". נוצר סמל בשולחן העבודה ובשורת המשימות, שתמיד נפתח בכרום, בחלון נקי.</li>
+          <li><b>קיצור דרך:</b> קובץ קטן שמורידים לשולחן העבודה. לחיצה כפולה עליו פותחת את האפליקציה בכרום, מכל מחשב שכרום מותקן בו.</li>
+          <li>כדי שגם קישורים ממיילים ומוואטסאפ ייפתחו בכרום: Windows, הגדרות, אפליקציות, אפליקציות ברירת מחדל, ובחירת Google Chrome.</li>
+        </ol>
+        <div className="settings-row">
+          <InstallButton className="btn btn-primary" />
+          {(platform() === 'windows' || platform() === 'mac') && link && (
+            <button className="btn btn-ghost" onClick={() => downloadLauncher(link)}>הורדת קיצור דרך שנפתח בכרום</button>
+          )}
+          <span className="hint">כרגע פתוח ב־{browserName()}{isChrome() ? '. מצוין.' : '. כדאי לעבור לכרום.'}</span>
         </div>
       </section>
 

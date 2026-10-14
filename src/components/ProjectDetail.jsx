@@ -11,7 +11,8 @@ import { PROFIT_THRESHOLD } from '../lib/config.js';
 import { StatusPill, ease } from './ui.jsx';
 import { BenchmarkLegend } from './Legend.jsx';
 import { ProfitPair } from './ProjectsView.jsx';
-import { NoteComposer, NoteList, formatStamp } from './Notes.jsx';
+import { NoteComposer, NoteList, formatStamp, isMail, noteDate } from './Notes.jsx';
+import MailLog from './MailLog.jsx';
 
 const F = Object.fromEntries(OPINION_FIELDS.map((f) => [f.key, f]));
 const projectName = (p) => p['שם התכנית'] || p['כתובת הפרויקט'] || 'ללא שם';
@@ -22,6 +23,8 @@ export default function ProjectDetail({ ctx, entry }) {
   const [draft, setDraft] = useState(p);
   const [editingOp, setEditingOp] = useState(null); // opinion id | '__new__'
   const [opDraft, setOpDraft] = useState({});
+  const [fileTab, setFileTab] = useState('timeline');
+  const [mailLogOpen, setMailLogOpen] = useState(false);
 
   useEffect(() => { if (!editMode) setDraft(p); }, [p, editMode]);
 
@@ -238,16 +241,19 @@ export default function ProjectDetail({ ctx, entry }) {
           </div>
         </div>
         <NoteComposer ctx={ctx} projectId={p._id} placeholder="הערה לתיק הפרויקט. תישמר עם תאריך ושם הכותב." />
-        <div className="file-grid">
-          <div>
-            <span className="label">הערות ומשימות</span>
-            <NoteList ctx={ctx} notes={notes} empty="אין עדיין הערות לתיק. הערות מהיומן שתויקו לפרויקט יופיעו כאן." />
-          </div>
-          <div>
-            <span className="label">ציר זמן מלא</span>
-            <FileTimeline entry={entry} notes={notes} />
-          </div>
+        <div className="file-actions">
+          <button className="btn btn-ghost" onClick={() => setMailLogOpen(true)}>תיוק מייל מתיבת הדואר</button>
+          <span className="hint">מייל שנשלח מכפתורי המייל כאן מתויק אוטומטית. מייל שהגיע מהיזם, מהשמאי או מכל גורם אחר מתייקים בהדבקה.</span>
         </div>
+        <div className="seg-control file-tabs" role="tablist" aria-label="תצוגת התיק">
+          {[['timeline', `ציר זמן מלא`], ['notes', `הערות ומשימות ${notes.filter((n) => !isMail(n)).length}`], ['mail', `מיילים ${notes.filter(isMail).length}`]].map(([v, l]) => (
+            <button key={v} role="tab" aria-selected={fileTab === v} className={fileTab === v ? 'on' : ''} onClick={() => setFileTab(v)}>{l}</button>
+          ))}
+        </div>
+        {fileTab === 'timeline' && <FileTimeline entry={entry} notes={notes} />}
+        {fileTab === 'notes' && <NoteList ctx={ctx} notes={notes.filter((n) => !isMail(n))} empty="אין עדיין הערות לתיק. הערות מהיומן שתויקו לפרויקט יופיעו כאן." />}
+        {fileTab === 'mail' && <NoteList ctx={ctx} notes={notes.filter(isMail).sort((a, b) => noteDate(b) - noteDate(a))} empty="אין עדיין מיילים בתיק." />}
+        <MailLog open={mailLogOpen} onClose={() => setMailLogOpen(false)} ctx={ctx} projectId={p._id} />
       </section>
 
       <AnimatePresence>
@@ -385,31 +391,62 @@ function OpinionForm({ n, draft, setDraft, onSave, onCancel, isNew }) {
 }
 
 // Merges opinion events, dated note lines inside opinions, and project notes into one chronology.
+const FT_LEGEND = [
+  ['event', 'בקשה או חוות דעת'],
+  ['opnote', 'הערה מתוך חוות דעת'],
+  ['note', 'הערה או משימה בתיק'],
+  ['mail_out', 'מייל שיצא מאיתנו'],
+  ['mail_in', 'מייל שהתקבל אצלנו']
+];
+
 function FileTimeline({ entry, notes }) {
+  const [only, setOnly] = useState('');
   const items = [];
   entry.opinions.forEach((o, i) => {
     const req = parseDate(o['תאריך קבלת בקשה']);
     const got = parseDate(o['תאריך קבלת חוו"ד']);
-    if (req) items.push({ d: req, kind: 'event', text: `התקבלה בקשה (חוו״ד ${i + 1})${o['שמאי מטעם היזם'] ? `, שמאי יזם: ${o['שמאי מטעם היזם']}` : ''}${o['רווחיות יזם (%)'] ? `, רווחיות לפי היזם ${o['רווחיות יזם (%)']}` : ''}` });
-    if (got) items.push({ d: got, kind: 'event', text: `התקבלה חוות דעת ${i + 1}${o['שמאי מטעם העירייה'] ? `, שמאי עירייה: ${o['שמאי מטעם העירייה']}` : ''}${o['רווחיות עירייה (%)'] ? `, רווחיות לפי העירייה ${o['רווחיות עירייה (%)']}` : ''}` });
+    if (req) items.push({ d: req, kind: 'event', who: `בקשה לחוו״ד ${i + 1}`, text: `${o['שמאי מטעם היזם'] ? `שמאי יזם: ${o['שמאי מטעם היזם']}` : 'הוגש דוח'}${o['רווחיות יזם (%)'] ? ` · רווחיות לפי היזם ${o['רווחיות יזם (%)']}` : ''}` });
+    if (got) items.push({ d: got, kind: 'event', who: `חוות דעת ${i + 1} התקבלה`, text: `${o['שמאי מטעם העירייה'] ? `שמאי עירייה: ${o['שמאי מטעם העירייה']}` : ''}${o['רווחיות עירייה (%)'] ? ` · רווחיות לפי העירייה ${o['רווחיות עירייה (%)']}` : ''}` });
     String(o['הערות / סטטוס'] || '').split('\n').map((l) => l.trim()).filter(Boolean).forEach((line) => {
       const m = line.match(/^(\d{1,2}\/\d{1,2}\/\d{2,4}):\s*(.*)$/);
       const d = m ? parseDate(m[1]) : (got || req);
       items.push({ d, kind: 'opnote', text: m ? m[2] : line, who: `הערה בחוו״ד ${i + 1}` });
     });
   });
-  notes.forEach((n) => items.push({ d: new Date(n.created_at), kind: 'note', text: n.body, who: n.author ? `${n.author}` : 'הערה' }));
+  notes.forEach((n) => {
+    if (isMail(n)) {
+      const m = n.meta || {};
+      const party = n.kind === 'mail_in' ? `מאת ${m.from || '—'}` : `אל ${m.to || m.from || '—'}`;
+      items.push({ d: noteDate(n), kind: n.kind, who: `${n.kind === 'mail_in' ? 'מייל נכנס' : 'מייל יוצא'} · ${party}${m.role ? ` (${m.role})` : ''}`, text: m.subject || '(ללא נושא)' });
+    } else {
+      items.push({ d: noteDate(n), kind: 'note', who: n.author || 'הערה', text: n.body });
+    }
+  });
   items.sort((a, b) => (b.d ? b.d.getTime() : 0) - (a.d ? a.d.getTime() : 0));
-  if (!items.length) return <p className="muted">אין עדיין אירועים.</p>;
+  const shown = only ? items.filter((it) => it.kind === only) : items;
   return (
-    <ol className="file-timeline">
-      {items.map((it, i) => (
-        <li key={i} className={`ft ft-${it.kind}`}>
-          <span className="ft-date mono">{it.d ? formatStamp(it.d.toISOString()) : 'ללא תאריך'}</span>
-          <span className="ft-text">{it.who && <span className="role">{it.who}: </span>}{it.text}</span>
-        </li>
-      ))}
-    </ol>
+    <div className="ft-wrap">
+      <div className="ft-legend" role="group" aria-label="מקרא נקודות. לחיצה מסננת">
+        <span className="label">מה מסמלות הנקודות · לחיצה מסננת</span>
+        {FT_LEGEND.map(([k, l]) => (
+          <button key={k} className={`ft-key${only === k ? ' on' : ''}`} onClick={() => setOnly(only === k ? '' : k)} aria-pressed={only === k}>
+            <i className={`ft-dot ft-dot-${k}`} />{l} <span className="mono">{items.filter((it) => it.kind === k).length}</span>
+          </button>
+        ))}
+      </div>
+      {!shown.length ? <p className="muted">אין עדיין אירועים.</p> : (
+        <ol className="file-timeline">
+          {shown.map((it, i) => (
+            <li key={i} className={`ft ft-${it.kind}`}>
+              <span className="ft-date mono">{it.d ? formatStamp(it.d.toISOString()) : 'ללא תאריך'}</span>
+              <span className="ft-who">{it.who}</span>
+              {it.text && <span className="ft-text">{it.text}</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="hint">מהחדש (למעלה) לישן (למטה).</p>
+    </div>
   );
 }
 

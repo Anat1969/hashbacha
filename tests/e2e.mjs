@@ -59,8 +59,8 @@ function handle(name, p) {
     case 'hb_remove_opinion': { db.projects.forEach((x) => x.opinions.forEach((o) => { if (o.id === p.p_id) o.deleted = 'now'; })); log('opinion_delete', ''); return { body: null }; }
     case 'hb_upsert_note': {
       const d = p.p_data;
-      if (!p.p_id) { const n = { _id: randomUUID(), project_id: d.project_id || null, kind: d.kind || 'note', body: d.body, author: d.author, done: !!d.done, due: d.due || null, created_at: new Date().toISOString() }; db.notes.unshift(n); log('note_add', d.body); return { body: n._id }; }
-      const n = db.notes.find((x) => x._id === p.p_id); Object.assign(n, { project_id: d.project_id || null, kind: d.kind, body: d.body, author: d.author, done: !!d.done, due: d.due || null }); return { body: n._id };
+      if (!p.p_id) { const n = { _id: randomUUID(), project_id: d.project_id || null, kind: d.kind || 'note', body: d.body, author: d.author, done: !!d.done, due: d.due || null, meta: d.meta || {}, created_at: new Date().toISOString() }; db.notes.unshift(n); log('note_add', d.body); return { body: n._id }; }
+      const n = db.notes.find((x) => x._id === p.p_id); Object.assign(n, { project_id: d.project_id || null, kind: d.kind, body: d.body, author: d.author, done: !!d.done, due: d.due || null, meta: d.meta || n.meta }); return { body: n._id };
     }
     case 'hb_remove_note': { const n = db.notes.find((x) => x._id === p.p_id); n.deleted = true; return { body: null }; }
     case 'hb_save_settings': db.settings = p.p_settings; return { body: null };
@@ -152,6 +152,11 @@ try {
   await page.click('.modal a:has-text("Gmail")');
   await page.waitForSelector('.mail-form', { state: 'detached' });
   ok((lastCall('hb_save_settings')?.params.p_settings.contacts || []).some((c) => c.email === 'saul@example.org'), 'address saved to contacts');
+  const sent = lastCall('hb_upsert_note').params.p_data;
+  ok(sent.kind === 'mail_out' && sent.project_id && sent.meta.subject.startsWith('תזכורת') && sent.meta.to === 'saul@example.org', 'sent mail filed to the project with date, subject and recipient');
+  ok(await page.isVisible('a.btn-claude[href^="https://claude.ai/code/"]'), 'Claude Code button in header');
+  ok(await page.evaluate(() => !!document.querySelector('link[rel=manifest]')), 'installable app manifest linked');
+  ok(!(await page.isVisible('.chrome-banner')), 'no Chrome banner inside Chrome');
 
   console.log('Keyword search, chips, sort, group');
   await page.fill('input[type=search]', 'דימרי');
@@ -276,12 +281,30 @@ try {
   await page.click('.composer .seg-control button:has-text("לבקש")');
   await page.fill('.composer input[aria-label="כותב ההערה"]', 'אילנית');
   await page.click('.composer button:has-text("שמור הערה")');
-  await page.waitForSelector('.note >> text=טבלת איזון');
+  await page.waitForSelector('.ft >> text=טבלת איזון');
   const nn = lastCall('hb_upsert_note').params;
   const cardId = decodeURIComponent(page.url().split('#/p/')[1]);
   ok(nn.p_data.project_id === cardId && nn.p_data.kind === 'ask' && nn.p_data.author === 'אילנית', 'note filed to project with kind and author');
   ok(await page.isVisible('.file-timeline >> text=טבלת איזון'), 'note appears in full project timeline');
   ok(await page.isVisible('.file-timeline >> text=התקבלה בקשה'), 'opinion notes merged into project timeline');
+  await page.click('button:has-text("תיוק מייל מתיבת הדואר")');
+  await page.waitForSelector('textarea[aria-label="הדבקת המייל"]');
+  await page.fill('textarea[aria-label="הדבקת המייל"]', 'From: שמאי א <a.appraiser@example.org>\nSent: Tuesday, March 4, 2025 10:12 AM\nTo: אילנית\nSubject: עדכון דוח כלכלי\n\nשלום, מצורף דוח מעודכן.');
+  ok((await page.inputValue('input[aria-label="נושא המייל"]')) === 'עדכון דוח כלכלי', 'pasted mail: subject parsed');
+  ok((await page.inputValue('input[aria-label="תאריך המייל"]')) === '2025-03-04', 'pasted mail: date parsed');
+  ok((await page.inputValue('select[aria-label="תפקיד השולח"]')) === 'שמאי היזם', 'pasted mail: sender recognised as the developer appraiser');
+  await page.click('.modal button:has-text("תייק מייל")');
+  await page.waitForSelector('.modal', { state: 'detached' });
+  const inMail = lastCall('hb_upsert_note').params.p_data;
+  ok(inMail.kind === 'mail_in' && inMail.project_id === cardId && inMail.meta.date === '2025-03-04' && inMail.meta.external, 'incoming mail filed to project');
+  ok(await page.isVisible('.ft-mail_in >> text=עדכון דוח כלכלי'), 'incoming mail on the project timeline');
+  ok(await page.isVisible('.ft-legend >> text=מה מסמלות הנקודות'), 'timeline explains the dots');
+  await page.click('.ft-key:has-text("מייל שהתקבל")');
+  ok((await page.locator('.file-timeline .ft').count()) === 1, 'legend filters the timeline');
+  await page.click('.ft-key:has-text("מייל שהתקבל")');
+  await page.click('.file-tabs button:has-text("מיילים")');
+  ok(await page.isVisible('.note-mail_in .mail-subject'), 'mail tab lists mails');
+  await page.click('.file-tabs button:has-text("הערות ומשימות")');
   await page.click('.note .tick');
   await page.waitForSelector('.note-done');
   ok(lastCall('hb_upsert_note').params.p_data.done === true, 'task marked done');
@@ -336,6 +359,26 @@ try {
       const rowsTxt = await page.locator('.detail-list li').allTextContents();
       ok(rowsTxt.length >= 2 && rowsTxt.every((r) => /יזם/.test(r) && /עירייה/.test(r)), `drill-down lists projects by date with both sides (${rowsTxt.length})`);
       ok(/מגמה/.test(await page.textContent('.detail-open .detail-head')), 'developer row states trend');
+      ok(/ממוצע רווחיות היזם בכל חוות הדעת שלו/.test(await page.textContent('.detail-open .detail-head')), 'average says what it averages');
+      ok((await page.locator('.detail-open .detail-project').count()) >= 1, 'drill-down split by project');
+      await page.click('.compare-btn');
+      ok(await page.isVisible('.compare-hint >> text=חסר'), 'comparison mode explains missing city values');
+      await page.waitForTimeout(900);
+      await page.locator('.chart-panel').screenshot({ path: `${SHOTS}/08-compare.png` });
+      await page.click('.compare-btn');
+      const box = await page.locator('.chart-box canvas').boundingBox();
+      await page.mouse.click(box.x + box.width - 90, box.y + 80);
+      await page.waitForSelector('.focus-bar');
+      ok(/מבודד/.test(await page.textContent('.focus-bar')), 'clicking a frame isolates the group');
+      await page.waitForTimeout(900);
+      await page.locator('.chart-panel').screenshot({ path: `${SHOTS}/08-focus.png` });
+      await page.click('.focus-bar button');
+      await page.waitForSelector('.focus-bar', { state: 'detached' });
+      ok(true, 'back to the full chart');
+      await page.click('.chart-toolbar button:has-text("לפי תאריך")');
+      await page.waitForTimeout(900);
+      await page.locator('.chart-panel').screenshot({ path: `${SHOTS}/08-date.png` });
+      await page.click('.chart-toolbar .seg-control button >> nth=0');
       ok((await page.locator('.details .arrow-up').count()) + (await page.locator('.details .arrow-down').count()) > 0, 'arrows shown');
       const upColor = await page.evaluate(() => { const el = document.querySelector('.arrow-up'); return el ? getComputedStyle(el).color : ''; });
       ok(!upColor || upColor === 'rgb(180, 50, 42)', `up arrow is red (danger) ${upColor}`);
@@ -406,6 +449,20 @@ try {
   await page.reload();
   await page.waitForSelector('.gate-card');
   ok(true, 'invalid stored code returns to gate');
+
+  console.log('Other browser → Chrome banner');
+  const edgeCtx = await browser.newContext({ viewport: { width: 1280, height: 800 }, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0' });
+  const edge = await edgeCtx.newPage();
+  await edge.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await edge.route('**/rest/v1/rpc/**', async (route) => { const name = route.request().url().split('/rpc/')[1]; const { status = 200, body } = handle(name, route.request().postDataJSON() || {}); await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }); });
+  await edge.goto(`${BASE}/?k=${KEY}`);
+  await edge.waitForSelector('.chrome-banner');
+  ok((await edge.textContent('.chrome-banner')).includes('Microsoft Edge'), 'banner names the current browser');
+  const [launcher] = await Promise.all([edge.waitForEvent('download'), edge.click('.chrome-banner button:has-text("קיצור דרך")')]);
+  const lp = `${SHOTS}/launcher.cmd`;
+  await launcher.saveAs(lp);
+  ok(readFileSync(lp, 'utf8').includes('start "" chrome "http://localhost:4173/?k=HB-TEST-TEST-TEST"'), 'Windows launcher opens the app in Chrome');
+  await edgeCtx.close();
 
   // ===== Mobile =====
   console.log('\nMobile 390');
