@@ -558,8 +558,15 @@ try {
     await (await chooser).setFiles(`docs/hashbacha/templates/${f}.xlsx`);
     await page.waitForSelector('.import-msg');
     await page.waitForTimeout(300);
+    const msg = await page.textContent('.import-msg');
+    ok(msg.includes('22 מתוך 22'), `${f}: all 22 fields imported`);
+    if (f === 'sample-municipality') ok(msg.includes('ולכן הוא נקלט במשבצת שמאי העירייה'), 'file routed by "סוג דוח" even when dropped on another slot');
     await page.click('.import-msg button:has-text("סגירה")');
   }
+  ok((await page.locator('.review-slot .link-btn:has-text("הורדת הקובץ")').count()) === 3, 'three original files stored with the review');
+  ok((await page.locator('.review-slot .mail-card b').allTextContents()).join('|') === 'שמאי היזם|ייחוס (לא חובה)|שמאי העירייה', 'slots ordered developer | reference | municipality');
+  ok((await page.locator('.table-review thead th').allTextContents()).slice(0, 5).join('|') === 'פרמטר|שמאי היזם|ייחוס ומקור|שמאי העירייה|טווח קביל', 'table columns: parameter | developer | reference | municipality | tolerance');
+  ok(await page.isVisible('tr[data-row="r18"] td.col-ref >> text=נוהג שוק'), 'reference column shows the source');
   const imp = calls.filter((c) => c.name === 'hb_review_import').map((c) => c.params);
   ok(imp.map((c) => c.p_slot).join() === 'D,M,N', 'imports go to slots D, M, N');
   ok(typeof imp[0].p_parsed.r5.v === 'number' && imp[0].p_file.content_b64.length > 100 && imp[0].p_actor === 'ענת', 'import payload: parsed values, file, reviewer name');

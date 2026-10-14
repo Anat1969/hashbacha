@@ -1,16 +1,17 @@
 // Pure scoring functions ported from docs/hashbacha/reference/index.html (logic only).
+// assess() and compare() follow the reference line by line; only the row shape differs ({D, M, N} passed in).
 import { PARAMS } from './rules.js';
 
 export const num = (v) => (v === '' || v == null ? NaN : Number(String(v).replace(/,/g, '').trim()));
 export const fmt = (v) => { const n = num(v); return Number.isFinite(n) ? n.toLocaleString('he-IL', { maximumFractionDigits: 2 }) : String(v ?? ''); };
 export const norm = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
-const empty = (v) => v === '' || v == null || (typeof v === 'string' && !v.trim());
+const empty = (v) => v === '' || v == null;
 
 export function tolText(r, N) {
   if (r.type === 'match') return 'זהות מלאה';
   if (r.type === 'min') return empty(N) ? 'לפחות כערך הייחוס' : `לפחות ${fmt(N)}`;
   if (r.tolType === 'rel') return `±${(r.tol * 100).toLocaleString('he-IL', { maximumFractionDigits: 1 })}%`;
-  return r.tol === 0 ? 'זהות מלאה' : `±${fmt(r.tol)}${r.unit.startsWith('%') ? ' נק׳' : ' ' + r.unit}`;
+  return r.tol === 0 ? 'זהות מלאה' : `±${fmt(r.tol)}${r.unit.startsWith('%') ? " נק'" : ' ' + r.unit}`;
 }
 
 // One side against the reference: in / out of range, distance, deviation text, position on the scale.
@@ -32,7 +33,7 @@ export function assess(r, v, N) {
   const sign = d > 0 ? '+' : d < 0 ? '−' : '';
   const txt = r.tolType === 'rel'
     ? `${sign}${Math.abs(d * 100).toLocaleString('he-IL', { maximumFractionDigits: 1 })}% מהייחוס`
-    : d === 0 ? 'זהה לייחוס' : `${sign}${fmt(Math.abs(d))}${r.unit.startsWith('%') ? ' נק׳' : ' ' + r.unit} מהייחוס`;
+    : d === 0 ? 'זהה לייחוס' : `${sign}${fmt(Math.abs(d))}${r.unit.startsWith('%') ? " נק'" : ' ' + r.unit} מהייחוס`;
   const pos = r.tol > 0 ? 50 + Math.max(-1, Math.min(1, d / (2 * r.tol))) * 50 : null;
   return { state: ok ? 'in' : 'out', dist: Math.abs(d), txt, pos };
 }

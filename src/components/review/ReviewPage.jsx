@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../../lib/api.js';
 import { CHAPTERS, PARAMS, REVIEW_STATUS, SLOTS } from '../../lib/review/rules.js';
 import { compare, fmt, levy, num, summary, tolText } from '../../lib/review/score.js';
-import { parseReport, prepareImport } from '../../lib/review/parse.js';
+import { WARN_KINDS, parseReport, prepareImport } from '../../lib/review/parse.js';
 import { reviewLetterRequest } from '../../lib/mailRequests.js';
 import { formatStamp } from '../Notes.jsx';
 import { ease } from '../ui.jsx';
@@ -104,16 +104,23 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
       const { buf, b64, sha } = await fileToB64(file);
       const wb = XLSX.read(buf, { type: 'array' });
       const rep = parseReport(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null }));
-      if (rep.slot && rep.slot !== slot) {
-        const go = await ctx.confirm(`בקובץ כתוב "סוג דוח: ${rep.meta['סוג דוח']}", אבל הוא נבחר למשבצת ${SLOTS[slot]}. לקלוט אותו בכל זאת כ${SLOTS[slot]}?`, 'לקלוט');
-        if (!go) return;
-      }
+      // The "סוג דוח" cell decides the slot; the clicked slot is only a fallback when the cell is empty.
+      const picked = slot;
+      slot = rep.slot || picked;
+      if (!slot) throw new Error('בתא "סוג דוח" צריך להופיע: יזם, עירייה או ייחוס.');
+      const rerouted = picked && rep.slot && rep.slot !== picked;
       const { parsed, warn, filled } = prepareImport(rep, slot, p['שם התכנית']);
       const meta = { appraiser: rep.meta['שם השמאי'] || '', date: rep.meta['תאריך השומה'] || '', project: rep.meta['שם הפרויקט'] || '', location: rep.meta['מיקום'] || '', plan: rep.meta['תכנית משביחה'] || '' };
       const res = await act((k) => api.reviewImport(k, review._id, slot, { name: file.name, size: file.size, sha256: sha, content_b64: b64, meta }, parsed, who()), `${SLOTS[slot]}: הדוח נקלט`);
-      if (res !== null) setImportMsg({ ok: true, title: `${SLOTS[slot]} נקלט מהקובץ ${file.name}: ${filled} מתוך 22 שדות הוזנו.`, warn });
+      if (res !== null) {
+        setImportMsg({
+          ok: true, slot, filled, warn,
+          title: `${SLOTS[slot]} נקלט מהקובץ ${file.name}: ${filled} מתוך 22 שדות הוזנו.`,
+          note: rerouted ? `בקובץ כתוב "סוג דוח: ${rep.meta['סוג דוח']}", ולכן הוא נקלט במשבצת ${SLOTS[slot]} ולא ב${SLOTS[picked]}.` : !rep.slot ? `בקובץ אין "סוג דוח", ולכן הוא נקלט במשבצת שנבחרה (${SLOTS[slot]}).` : ''
+        });
+      }
     } catch (err) {
-      setImportMsg({ ok: false, title: 'הקובץ לא נקלט.', warn: [err.message || 'שגיאה בקריאת הקובץ'] });
+      setImportMsg({ ok: false, title: 'הקובץ לא נקלט.', warn: [{ kind: 'error', text: err.message || 'שגיאה בקריאת הקובץ' }] });
     }
   }
 
@@ -236,10 +243,10 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
         <p className="hint">{status ? `מצב: ${status.label}. ` : ''}{nextStep(review, sum, rejected.length)}</p>
 
         <div className="mail-actions review-slots">
-          {['D', 'M', 'N'].map((slot) => {
+          {['D', 'N', 'M'].map((slot) => {
             const f = files[slot];
             return (
-              <div key={slot} className={`review-slot${dragSlot === slot ? ' is-drag' : ''}`}
+              <div key={slot} className={`review-slot${slot === 'N' ? ' review-slot-ref' : ''}${dragSlot === slot ? ' is-drag' : ''}`}
                 onDragOver={(e) => { if (canWrite) { e.preventDefault(); setDragSlot(slot); } }}
                 onDragLeave={() => setDragSlot(null)} onDrop={(e) => onDrop(e, slot)}>
                 <button className="mail-card" onClick={() => pickFile(slot)} disabled={!canWrite}>
@@ -254,6 +261,12 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
           })}
           <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={onFile} aria-label="קובץ דוח" />
         </div>
+        {canWrite && (
+          <div className="file-actions">
+            <button className="btn btn-ghost" onClick={() => pickFile(null)}>העלאת דוח · ניתוב לפי "סוג דוח"</button>
+            <span className="hint">הקובץ נכנס למשבצת לפי התא "סוג דוח" בקובץ (יזם / ייחוס / עירייה), גם אם נבחרה משבצת אחרת.</span>
+          </div>
+        )}
         <p className="hint">
           התבנית האחידה: גיליון ראשון, שורות "סוג דוח" (יזם / עירייה / ייחוס), שם הפרויקט, מיקום, תכנית משביחה, שם השמאי ותאריך השומה,
           ואחריהן טבלה שמתחילה ב"קוד" עם 22 השורות r1–r22. <a className="link-btn" href="/templates/template.xlsx" download="תבנית-דוח-שמאי.xlsx">הורדת תבנית ריקה לשמאים</a>
@@ -272,7 +285,16 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
           {importMsg && (
             <motion.div className={`import-msg${importMsg.ok ? '' : ' is-error'}`} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease }}>
               <b>{importMsg.title}</b>
-              {importMsg.warn.length > 0 ? (<><span className="label">{importMsg.warn.length} הערות לבדיקה</span><ul className="insights">{importMsg.warn.map((w) => <li key={w}>{w}</li>)}</ul></>)
+              {importMsg.note && <span className="hint">{importMsg.note}</span>}
+              {importMsg.ok && (
+                <dl className="summary import-summary">
+                  <div><dt className="label">שדות שהוזנו</dt><dd>{importMsg.filled} / 22</dd></div>
+                  {Object.entries(WARN_KINDS).map(([k, l]) => (
+                    <div key={k}><dt className="label">{l}</dt><dd className={importMsg.warn.some((w) => w.kind === k) ? 'no-text' : ''}>{importMsg.warn.filter((w) => w.kind === k).length}</dd></div>
+                  ))}
+                </dl>
+              )}
+              {importMsg.warn.length > 0 ? (<><span className="label">{importMsg.warn.length} הערות לבדיקה</span><ul className="insights">{importMsg.warn.map((w) => <li key={w.text} data-kind={w.kind}>{w.text}</li>)}</ul></>)
                 : <span className="muted">כל השדות הוזנו עם מקור.</span>}
               <button className="btn btn-sm btn-ghost" onClick={() => setImportMsg(null)}>סגירה</button>
             </motion.div>
@@ -324,7 +346,7 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
               <tr>
                 <th>פרמטר</th>
                 <th>שמאי היזם</th>
-                <th>ייחוס ומקור</th>
+                <th className="col-ref">ייחוס ומקור</th>
                 <th>שמאי העירייה</th>
                 <th>טווח קביל</th>
                 <th>בקרה</th>
@@ -341,7 +363,7 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
                       <td data-label="שמאי היזם">{refEdit
                         ? <input className="input input-cell" dir="ltr" aria-label={`יזם ${r.label}`} value={refDraft[r.id]?.D ?? ''} onChange={(e) => setCell(r, 'D', e.target.value)} />
                         : <SideCell v={row.D} note={row.Dnote} s={c.D} />}</td>
-                      <td data-label="ייחוס ומקור">
+                      <td data-label="ייחוס ומקור" className="col-ref">
                         {refEdit ? (
                           <div className="ref-edit">
                             <input className="input input-cell" dir="ltr" aria-label={`ייחוס ${r.label}`} value={refDraft[r.id]?.N ?? ''} onChange={(e) => setCell(r, 'N', e.target.value)} />
