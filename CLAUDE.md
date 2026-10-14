@@ -13,7 +13,8 @@
 
 - Never hand over a bare code with no instructions. Deliver a one-click entry link: `https://hashbacha-roan.vercel.app/?k=CODE`. The app stores the code and strips it from the URL.
 - The gate screen explains how to get in; Settings shows a copyable entry link for sharing with the team.
-- Vercel's production branch is `main`, not the repo default branch: after merging, deploy production manually (`create_deployment` with `target: production`).
+- Vercel's production branch is `main`, not the repo default branch. Every merge to the default branch must also be merged into `main` (PR default → main); otherwise production keeps an old version. (2026-10-14: `main` served the standalone comparison page instead of the app.)
+- Never put files at the repo root or replace `index.html`; module material lives in `docs/hashbacha/`, app code in `src/`.
 
 ## Chrome (user requirement, repeated 2026-10-14)
 
@@ -35,7 +36,7 @@
 
 ## Testing
 
-`npm run build && npm test` (115 checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (17 review-logic checks + 140 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
 ## Design rule for the appraisal review module
@@ -76,3 +77,8 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 - docs/hashbacha/reference/index.html is a reference for LOGIC ONLY (parsing, scoring, data structure). Ignore its CSS, fonts, colors and layout.
 - Status colors (green = closer / in range, red = farther / exceedance) come from the app's existing success and danger tokens.
 - Hebrew, RTL, no icons.
+
+## Appraisal review module (built 2026-10-14)
+- It is a tab inside the app, not a separate page: project card tabs "פרויקט ומעקב" / "שומות השבחה" (`#/p/:id/r`, `#/p/:id/r/:reviewId`).
+- Logic: `src/lib/review/`. UI: `src/components/review/`. The comparison reuses table / group-row / pill / mail-card / summary / file-timeline / editbar.
+- Roles per access code (`hb_access_keys.role`): editor (all), reviewer (review writes only), viewer (read). Viewer writes raise `hb_readonly` (toast, no logout).

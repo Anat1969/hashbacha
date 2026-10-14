@@ -10,6 +10,8 @@ import { reminderRequest } from '../lib/mailRequests.js';
 import { Field, Modal, StatusPill, ease } from './ui.jsx';
 import { BenchmarkLegend } from './Legend.jsx';
 import { PROFIT_THRESHOLD } from '../lib/config.js';
+import { ReviewPill, reviewOf } from './review/ReviewPill.jsx';
+import { REVIEW_STATUS } from '../lib/review/rules.js';
 
 const latestOpinion = (e) => e.opinions[e.opinions.length - 1] || null;
 const latestWith = (e, key) => {
@@ -28,7 +30,8 @@ const COLS = [
   { key: 'סטטוס רמזור', label: 'סטטוס' },
   { key: '__follow', label: 'גורם מעקב' },
   { key: '__count', label: 'חוו״ד' },
-  { key: '__profit', label: 'רווחיות אחרונה' }
+  { key: '__profit', label: 'רווחיות אחרונה' },
+  { key: '__review', label: 'בקרת שומה' }
 ];
 const INLINE_KEYS = ['רובע', 'שם התכנית', 'שם היזם', "מס' תכנית/ מס זמני", 'סטטוס רמזור'];
 
@@ -53,14 +56,16 @@ const GROUPS = [
   { value: '__cityAppraiser', label: 'שמאי עירייה', fn: (r) => latestOpinion(r.e)?.['שמאי מטעם העירייה'] },
   { value: '__devAppraiser', label: 'שמאי יזם', fn: (r) => latestWith(r.e, 'שמאי מטעם היזם')?.['שמאי מטעם היזם'] },
   { value: '__year', label: 'שנת בקשה אחרונה', fn: (r) => { const d = parseDate(latestOpinion(r.e)?.['תאריך קבלת בקשה']); return d ? String(d.getFullYear()) : null; } },
-  { value: '__count', label: 'מספר חוות דעת', fn: (r) => `${r.e.opinions.length} חוו״ד` }
+  { value: '__count', label: 'מספר חוות דעת', fn: (r) => `${r.e.opinions.length} חוו״ד` },
+  { value: '__review', label: 'סטטוס בקרת שומה', fn: (r) => (r.review ? REVIEW_STATUS[r.review.status]?.label : 'טרם נפתחה בקרה') }
 ];
 
 const CHIPS = [
   { id: 'city', label: 'ממתין לעירייה', test: (r) => r.follow && SIDE(r.follow.who) === 'city' },
   { id: 'dev', label: 'ממתין ליזם / שמאי היזם', test: (r) => r.follow && SIDE(r.follow.who) === 'dev' },
   { id: 'above', label: 'מעל הבנצ׳מרק', test: (r) => r.dev !== null && r.dev > PROFIT_THRESHOLD },
-  { id: 'none', label: 'ללא רווחיות', test: (r) => r.dev === null }
+  { id: 'none', label: 'ללא רווחיות', test: (r) => r.dev === null },
+  { id: 'review', label: 'שומות בבדיקה', test: (r) => r.review && r.review.status !== 'approved' }
 ];
 
 export function SortHeader({ label, col, sort, onSort }) {
@@ -119,9 +124,10 @@ export default function ProjectsView({ ctx }) {
 
   const stats = useMemo(() => overview(projects), [projects]);
 
+  const reviews = ctx.data.reviews || [];
   const allRows = useMemo(() => projects.map((e) => ({
-    e, p: e.project, dev: latestDev(e), city: latestCity(e), follow: followUp(e)
-  })), [projects]);
+    e, p: e.project, dev: latestDev(e), city: latestCity(e), follow: followUp(e), review: reviewOf(reviews, e.project._id)
+  })), [projects, reviews]);
 
   const rows = useMemo(() => {
     let list = allRows;
@@ -134,6 +140,7 @@ export default function ProjectsView({ ctx }) {
         if (sort.col === '__count') { va = a.e.opinions.length; vb = b.e.opinions.length; }
         else if (sort.col === '__profit') { va = a.dev ?? -999; vb = b.dev ?? -999; }
         else if (sort.col === '__follow') { va = a.follow ? a.follow.days : -1; vb = b.follow ? b.follow.days : -1; }
+        else if (sort.col === '__review') { va = a.review ? Object.keys(REVIEW_STATUS).indexOf(a.review.status) : -1; vb = b.review ? Object.keys(REVIEW_STATUS).indexOf(b.review.status) : -1; }
         else { va = a.p[sort.col] || ''; vb = b.p[sort.col] || ''; }
         if (typeof va === 'number') return (va - vb) * dir;
         return String(va).localeCompare(String(vb), 'he') * dir;
@@ -321,6 +328,7 @@ export default function ProjectsView({ ctx }) {
                         <td data-label="גורם מעקב" className={sc('__follow')}><FollowBadge follow={r.follow} /></td>
                         <td data-label="חוו״ד" className={`mono ${sc('__count')}`}>{e.opinions.length}</td>
                         <td data-label="רווחיות" className={sc('__profit')}><ProfitPair dev={r.dev} city={r.city} /></td>
+                        <td data-label="בקרת שומה" className={sc('__review')}><ReviewPill review={r.review} /></td>
                         <td className="col-actions">
                           {isEdit ? (
                             <div className="row-actions">
@@ -330,6 +338,7 @@ export default function ProjectsView({ ctx }) {
                           ) : (
                             <div className="row-actions">
                               <a className="btn btn-sm btn-ghost" href={`#/p/${id}`}>פתח</a>
+                              <a className="btn btn-sm btn-ghost" href={`#/p/${id}/r`}>בקרת שומת השבחה</a>
                               <button className="btn btn-sm btn-ghost" onClick={() => startEdit(e)}>ערוך</button>
                               <button className="btn btn-sm btn-ghost btn-quiet" onClick={() => remove(e)}>מחק</button>
                             </div>
