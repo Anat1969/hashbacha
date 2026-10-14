@@ -1,30 +1,35 @@
 # Hashbacha Project
 
-## GitHub Pages Deployment
+## Stack (v2, from 2026-10)
 
-The site is served from the `gh-pages` branch at `anat1969.github.io/hashbacha/`.
-GitHub Pages serves files from the **root** of the `gh-pages` branch.
+- Vite + React 18 + framer-motion, Hebrew RTL, no icons.
+- Supabase project `ASHDODMAP` (`cbhexpybdggwzyakgagd`), shared — every table/function uses the `hb_` prefix.
+- Data access only through `hb_*` RPC functions gated by an access code (sha256 in `hb_access_keys`) or an email in `hb_admins`. Tables have RLS on and no anon grants.
+- Deletes are soft (`deleted_at`) with a trash/restore UI. The Supabase MCP tool stalls on SQL containing DELETE statements (waits for confirmation), so keep using soft deletes.
+- Chart.js for analytics, SheetJS (xlsx) for Excel import/export (lazy-loaded).
+- Deployed on Vercel from GitHub (project `hashbacha`). `vercel.json` sets Vite build + SPA rewrite.
 
-**CRITICAL**: After every push to `gh-pages`, the root-level files (`index.html`, `app.js`, `styles.css`, `data.js`, `chart.umd.min.js`, `xlsx.full.min.js`) MUST be copies of the files in `public/`. Always run:
+## Testing
 
-```
-git checkout gh-pages
-cp public/index.html public/app.js public/styles.css public/data.js public/chart.umd.min.js public/xlsx.full.min.js .
-git add index.html app.js styles.css data.js chart.umd.min.js xlsx.full.min.js
-git commit -m "Sync root files with public/ for GitHub Pages"
-git push origin gh-pages
-```
+`npm run build && npm test` — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
-Never assume that merging the feature branch into `gh-pages` is enough — always verify and sync the root files.
+## Design language
+
+Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM Plex Mono labels, layered panels with shadows, perspective grid backdrop, motion on entry. Running text ≥ 4.5:1 contrast.
+
+## Domain notes
+
+- Profit threshold is 15%. Ranges like "10-16%" resolve to their midpoint and are tagged "טווח".
+- Arrows in analytics: green ↑ above 15%, red ↓ at or below (explicit user request).
+- Notes field: added text is stamped with today's date on its own line.
+- "Waiting" = a project's latest opinion has a request date but no opinion date.
+
+## Legacy
+
+`legacy/` holds the v1 vanilla app (GitHub Pages, `gh-pages` branch). The gh-pages sync rule applied to v1 only: copy `legacy/public/*` to the gh-pages root if v1 ever needs a fix.
 
 ## Branches
 
-- `claude/unclear-description-myfrxh` — feature development branch
-- `gh-pages` — production branch served by GitHub Pages
-
-## Stack
-
-- Vanilla JS (IIFE, no frameworks), Hebrew RTL
-- Chart.js for analytics
-- Express server with JSON file storage
-- SheetJS (xlsx) for Excel import/export
+- `claude/unclear-description-myfrxh` — repository default branch
+- `gh-pages` — v1 on GitHub Pages

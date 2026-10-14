@@ -1,0 +1,16 @@
+{
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "latest",
+    "chart.js": "^4.4.7",
+    "express": "latest",
+    "nodemailer": "latest",
+    "playwright": "^1.61.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.50.0"
+  }
+}
