@@ -11,7 +11,15 @@ import ActivityView from './components/ActivityView.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 
+// An entry link (?k=CODE) signs in with one click; the code is then removed from the address bar.
 function readKey() {
+  const fromUrl = new URLSearchParams(window.location.search).get('k');
+  if (fromUrl) {
+    const k = fromUrl.trim().toUpperCase();
+    writeKey(k);
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    return k;
+  }
   try { return localStorage.getItem(KEY_STORAGE) || ''; } catch { return ''; }
 }
 function writeKey(k) {

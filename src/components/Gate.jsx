@@ -75,8 +75,16 @@ export default function Gate({ onEnter }) {
           <p className={`gate-msg gate-msg-${state}`} role="status">
             {state === 'wrong' && 'הקוד שגוי. בדקו את האותיות ונסו שוב.'}
             {state === 'offline' && 'אין חיבור לשרת. נסו שוב בעוד רגע.'}
-            {(state === 'idle' || state === 'checking') && 'הקוד נשמר בדפדפן זה בלבד, ונדרש פעם אחת.'}
+            {(state === 'idle' || state === 'checking') && 'מקלידים פעם אחת. הדפדפן זוכר את הקוד מכאן והלאה.'}
           </p>
+          <div className="gate-help">
+            <span className="label">איך נכנסים</span>
+            <ol>
+              <li>הדרך הקלה: לפתוח את קישור הכניסה האישי שנשלח אליך. הוא מכניס ישירות.</li>
+              <li>או להקליד את קוד הגישה (מתחיל ב־HB) וללחוץ כניסה. אין הבדל בין אותיות גדולות לקטנות.</li>
+              <li>אין קוד? לבקש ממנהלת המערכת קישור כניסה. היא מוצאת אותו במסך ההגדרות.</li>
+            </ol>
+          </div>
         </motion.form>
       </div>
     </div>
