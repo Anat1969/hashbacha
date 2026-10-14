@@ -20,6 +20,7 @@
 
 - The user wants the app always in Google Chrome. A page cannot pick its browser, so: the app is an installable PWA (`public/manifest.webmanifest`, `public/sw.js`, install button in the header and Settings); outside Chrome a banner names the current browser and offers Android intent / iOS `googlechromes://` links or a Windows `.cmd` / Mac `.command` launcher (`src/lib/browser.js`). Never answer this with "not possible" alone.
 - Header has a "עריכה ושדרוג ב־Claude" button linking to the Claude Code session.
+- Every link handed to the user in chat comes in Chrome form too (user feedback, 2026-10-14, third time): Windows `chrome "URL"` (Win+R), Mac `open -a "Google Chrome" "URL"`, Android `intent://HOST/PATH#Intent;scheme=https;package=com.android.chrome;end`, iPhone `googlechromes://HOST/PATH`. Never a bare https link alone.
 
 ## Notes, mail, contacts
 
