@@ -15,15 +15,27 @@
 - The gate screen explains how to get in; Settings shows a copyable entry link for sharing with the team.
 - Vercel's production branch is `main`, not the repo default branch: after merging, deploy production manually (`create_deployment` with `target: production`).
 
+## Chrome (user requirement, repeated 2026-10-14)
+
+- The user wants the app always in Google Chrome. A page cannot pick its browser, so: the app is an installable PWA (`public/manifest.webmanifest`, `public/sw.js`, install button in the header and Settings); outside Chrome a banner names the current browser and offers Android intent / iOS `googlechromes://` links or a Windows `.cmd` / Mac `.command` launcher (`src/lib/browser.js`). Never answer this with "not possible" alone.
+- Header has a "עריכה ושדרוג ב־Claude" button linking to the Claude Code session.
+
 ## Notes, mail, contacts
 
 - `hb_notes` (kinds: todo/ask/remember/note, optional project_id, due, done). Project card shows filed notes plus a merged timeline of opinion events and dated note lines.
 - Every mail opens in `MailComposer` for editing first, then Gmail / Outlook web / mailto / copy. Browsers cannot be forced to Chrome; web compose opens in the current browser.
 - Contacts live in `hb_settings.data.contacts` [{name, role, email}]; an address typed in a draft is saved there.
+- Every mail sent from the app is filed as `hb_notes` kind `mail_out` (meta: to, subject, via, date). Incoming or external mails are filed by paste (`MailLog`, parser in `src/lib/mailParse.js`) as `mail_in` with sender role and project auto-guessed. No mailbox integration yet (no approval).
+- Project file timeline: dots legend (event / opinion note / note / mail out / mail in), click a legend key to filter; newest first.
+
+## Analytics
+- Gap tab shows developer profit only; "השוואה יזם מול עירייה" adds city bars and dashed "חסר" slots where city is missing.
+- Grouped sorts draw frames; clicking a frame isolates it (focus bar, back button). Date-ordered charts label both axis ends (ישן / חדש).
+- Every average states what it averages; developer drill-down is split by project.
 
 ## Testing
 
-`npm run build && npm test` (96 checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (115 checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
 ## Design language

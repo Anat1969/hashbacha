@@ -146,6 +146,7 @@ export function overview(projects, now = new Date()) {
   return {
     projects: projects.length,
     opinions: ops.length,
+    devCount: devVals.length,
     avgDev,
     abovePct: devVals.length ? (above / devVals.length) * 100 : null,
     medianTurn,

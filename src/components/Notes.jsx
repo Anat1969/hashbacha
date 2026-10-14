@@ -8,7 +8,28 @@ const AUTHOR_KEY = 'hashbacha-author';
 const readAuthor = () => { try { return localStorage.getItem(AUTHOR_KEY) || ''; } catch { return ''; } };
 const writeAuthor = (v) => { try { localStorage.setItem(AUTHOR_KEY, v); } catch { /* storage blocked */ } };
 
-const kindLabel = (k) => (NOTE_KINDS.find((x) => x.value === k) || NOTE_KINDS[3]).label;
+const kindLabel = (k) => (k === 'mail_out' ? 'מייל יוצא' : k === 'mail_in' ? 'מייל נכנס' : (NOTE_KINDS.find((x) => x.value === k) || NOTE_KINDS[3]).label);
+export const isMail = (n) => n.kind === 'mail_out' || n.kind === 'mail_in';
+// The date a note "happened": the email's own date when filed later, else when it was written.
+export const noteDate = (n) => new Date((n.meta && n.meta.date) || n.created_at);
+
+function MailBody({ n }) {
+  const [open, setOpen] = useState(false);
+  const m = n.meta || {};
+  const long = (n.body || '').split('\n').length > 4 || (n.body || '').length > 320;
+  return (
+    <>
+      <p className="mail-subject">{m.subject || '(ללא נושא)'}</p>
+      <p className="mail-party">
+        {n.kind === 'mail_in' ? <><span className="role">מאת:</span> {m.from || '—'}</> : <><span className="role">אל:</span> {m.to || m.from || '—'}</>}
+        {m.role && <span className="party-role">{m.role}</span>}
+        {m.external ? <span className="muted"> · תויק מתיבת הדואר</span> : <span className="muted"> · נשלח מהמערכת{m.via ? ` (${({ gmail: 'Gmail', outlook: 'Outlook', mailto: 'תוכנת דואר', copy: 'הועתק' })[m.via] || m.via})` : ''}</span>}
+      </p>
+      {n.body && <p className={`note-body mail-text${open || !long ? '' : ' clamp'}`}>{n.body}</p>}
+      {long && <button className="link-btn" onClick={() => setOpen(!open)}>{open ? 'הצג פחות' : 'הצג את כל המייל'}</button>}
+    </>
+  );
+}
 
 export function formatStamp(iso) {
   const d = new Date(iso);
@@ -90,7 +111,7 @@ export function NoteList({ ctx, notes, showProject = false, empty }) {
       <AnimatePresence initial={false}>
         {notes.map((n) => {
           const p = n.project_id ? byId.get(n.project_id) : null;
-          const actionable = n.kind !== 'note';
+          const actionable = n.kind !== 'note' && !isMail(n);
           return (
             <motion.li
               key={n._id}
@@ -105,17 +126,17 @@ export function NoteList({ ctx, notes, showProject = false, empty }) {
                 <button className={`tick${n.done ? ' on' : ''}`} onClick={() => toggle(n)} aria-label={n.done ? 'סמן כפתוח' : 'סמן כבוצע'}>
                   <span />
                 </button>
-              ) : <span className="tick tick-static" aria-hidden="true" />}
+              ) : <span className={`tick tick-static${isMail(n) ? ` tick-${n.kind}` : ''}`} aria-hidden="true" />}
               <div className="note-main">
                 <div className="note-meta">
                   <span className={`kind kind-${n.kind}`}>{kindLabel(n.kind)}</span>
-                  <span className="mono">{formatStamp(n.created_at)}</span>
-                  {n.author && <span className="muted">{n.author}</span>}
+                  <span className="mono note-date">{formatStamp(noteDate(n).toISOString())}</span>
+                  {n.author && !isMail(n) && <span className="note-author">{n.author}</span>}
                   {n.due && <span className="due mono">יעד {formatStamp(n.due)}</span>}
                   {showProject && p && <a className="note-project" href={`#/p/${n.project_id}`}>{p['שם התכנית'] || p['שם היזם']}</a>}
                   {showProject && !p && <span className="muted">כללי</span>}
                 </div>
-                <p className="note-body">{n.body}</p>
+                {isMail(n) ? <MailBody n={n} /> : <p className="note-body">{n.body}</p>}
               </div>
               <button className="btn btn-sm btn-ghost btn-quiet" onClick={() => remove(n)}>מחק</button>
             </motion.li>

@@ -11,6 +11,7 @@ import ActivityView from './components/ActivityView.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import MailComposer from './components/MailComposer.jsx';
+import { ChromeBanner, CLAUDE_CODE_URL, InstallButton } from './components/ChromeBar.jsx';
 
 // An entry link (?k=CODE) signs in with one click; the code is then removed from the address bar.
 function readKey() {
@@ -138,6 +139,7 @@ export default function App() {
         <div className="glow glow-b" />
       </div>
 
+      <ChromeBanner />
       <header className="topbar">
         <a className="brand" href="#/">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
@@ -164,6 +166,8 @@ export default function App() {
               </motion.span>
             )}
           </AnimatePresence>
+          <InstallButton />
+          <a className="btn btn-ghost btn-claude" href={CLAUDE_CODE_URL} target="_blank" rel="noreferrer" title="פתיחת שיחת הפיתוח ב־Claude Code להמשך עריכה ושדרוג">עריכה ושדרוג ב־Claude</a>
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)}>הגדרות</button>
         </div>
       </header>

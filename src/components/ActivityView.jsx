@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { NOTE_KINDS } from '../lib/fields.js';
 import { ease } from './ui.jsx';
-import { NoteComposer, NoteList } from './Notes.jsx';
+import { NoteComposer, NoteList, isMail, noteDate } from './Notes.jsx';
+import MailLog from './MailLog.jsx';
 
 const ACTION_LABEL = {
   project_add: 'נוסף פרויקט',
@@ -14,6 +15,8 @@ const ACTION_LABEL = {
   opinion_edit: 'עודכנה חוות דעת',
   opinion_delete: 'נמחקה חוות דעת',
   note_add: 'נוספה הערה',
+  mail_out: 'תויק מייל יוצא',
+  mail_in: 'תויק מייל נכנס',
   import: 'ייבוא מ־Excel'
 };
 
@@ -28,10 +31,11 @@ export default function ActivityView({ ctx }) {
   const [status, setStatus] = useState('open');
   const [kind, setKind] = useState('');
   const [scope, setScope] = useState('');
+  const [mailOpen, setMailOpen] = useState(false);
 
   const shown = notes.filter((n) =>
-    (status === 'all' || (status === 'open' ? !n.done : n.done)) &&
-    (!kind || n.kind === kind) &&
+    (status === 'all' || isMail(n) || (status === 'open' ? !n.done : n.done)) &&
+    (!kind || n.kind === kind || (kind === 'mail' && isMail(n))) &&
     (!scope || (scope === 'general' ? !n.project_id : !!n.project_id)));
 
   async function restore(t) {
@@ -59,6 +63,11 @@ export default function ActivityView({ ctx }) {
           {openCount > 0 && <span className="count-badge mono" title="משימות פתוחות">{openCount}</span>}
         </div>
         <NoteComposer ctx={ctx} allowProjectPick />
+        <div className="file-actions">
+          <button className="btn btn-ghost" onClick={() => setMailOpen(true)}>תיוק מייל מתיבת הדואר</button>
+          <span className="hint">מדביקים מייל שהגיע מהיזם, מהשמאי או מכל גורם. הפרויקט מזוהה אוטומטית לפי מספר התכנית, שם התכנית או היזם.</span>
+        </div>
+        <MailLog open={mailOpen} onClose={() => setMailOpen(false)} ctx={ctx} />
       </section>
 
       <section className="panel">
@@ -76,6 +85,7 @@ export default function ActivityView({ ctx }) {
             <select className="input select" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="סוג">
               <option value="">כל הסוגים</option>
               {NOTE_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+              <option value="mail">מיילים</option>
             </select>
             <select className="input select" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="תיוק">
               <option value="">כללי ומתויק</option>
@@ -84,7 +94,7 @@ export default function ActivityView({ ctx }) {
             </select>
           </div>
         </div>
-        <NoteList ctx={ctx} notes={shown} showProject empty="אין רשומות שתואמות את הסינון." />
+        <NoteList ctx={ctx} notes={shown.slice().sort((a, b) => noteDate(b) - noteDate(a))} showProject empty="אין רשומות שתואמות את הסינון." />
       </section>
 
       <div className="insight-grid">

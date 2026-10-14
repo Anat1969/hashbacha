@@ -117,7 +117,8 @@ const thresholdPlugin = (value, label) => ({
   }
 });
 
-function buildAnalysis(tab, data, sort) {
+function buildAnalysis(tab, data, sort, opts = {}) {
+  const { compare = false, focus = null } = opts;
   if (tab === 'gap') {
     const items = data.filter((d) => d.dev !== null);
     if (!items.length) return { empty: 'אין עדיין נתוני רווחיות יזם.' };
@@ -127,37 +128,53 @@ function buildAnalysis(tab, data, sort) {
       city: mean(g.list.map((d) => d.city).filter((v) => v !== null)),
       list: g.list.slice().sort((a, b) => (dateOf(a)?.getTime() || 0) - (dateOf(b)?.getTime() || 0))
     }));
+    const byDate = (a, b) => (dateOf(a)?.getTime() || 0) - (dateOf(b)?.getTime() || 0);
+    const groupKey = (d) => (sort === 'quarter' ? `רובע ${d.quarter || '—'}` : d.developer);
     let ordered; let frames = null;
-    if (sort === 'group') {
-      const gs = devGroups.sort((a, b) => a.name.localeCompare(b.name, 'he'));
+    if (focus) {
+      ordered = items.filter((d) => groupKey(d) === focus).sort(byDate);
+    } else if (sort === 'group' || sort === 'quarter') {
+      const gs = sort === 'group' ? devGroups.slice().sort((a, b) => a.name.localeCompare(b.name, 'he'))
+        : groupBy(items, groupKey).sort((a, b) => a.name.localeCompare(b.name, 'he')).map((g) => ({ ...g, list: g.list.slice().sort(byDate) }));
       ordered = []; frames = [];
       gs.forEach((g) => { frames.push({ name: g.name, start: ordered.length, end: ordered.length + g.list.length - 1 }); ordered.push(...g.list); });
     } else if (sort === 'desc') ordered = items.slice().sort((a, b) => b.dev - a.dev);
     else if (sort === 'asc') ordered = items.slice().sort((a, b) => a.dev - b.dev);
-    else if (sort === 'date') ordered = items.slice().sort((a, b) => (dateOf(a)?.getTime() || 0) - (dateOf(b)?.getTime() || 0));
-    else {
-      const gs = groupBy(items, (d) => `רובע ${d.quarter || '—'}`).sort((a, b) => a.name.localeCompare(b.name, 'he'));
-      ordered = []; frames = [];
-      gs.forEach((g) => { frames.push({ name: g.name, start: ordered.length, end: ordered.length + g.list.length - 1 }); ordered.push(...g.list); });
-    }
-    const labels = ordered.map((d) => (sort === 'group' ? `${d.plan.slice(0, 12)} ${dateOf(d) ? dateOf(d).getFullYear() : ''}` : `${d.developer.slice(0, 10)} · ${d.plan.slice(0, 10)}`));
+    else ordered = items.slice().sort(byDate);
+    const mmyy = (d) => (dateOf(d) ? `${String(dateOf(d).getMonth() + 1).padStart(2, '0')}/${dateOf(d).getFullYear()}` : 'ללא תאריך');
+    const labels = ordered.map((d) => (focus ? `${d.plan.slice(0, 18)} · ${mmyy(d)}`
+      : sort === 'date' ? `${mmyy(d)} · ${d.developer.slice(0, 10)}`
+      : sort === 'group' ? `${d.plan.slice(0, 12)} ${dateOf(d) ? dateOf(d).getFullYear() : ''}`
+      : `${d.developer.slice(0, 10)} · ${d.plan.slice(0, 10)}`));
     const dev = ordered.map((d) => d.dev);
     const city = ordered.map((d) => d.city);
     const cityVals = city.filter((v) => v !== null);
     const datasets = [{ label: 'רווחיות לפי דוח היזם', data: dev, backgroundColor: dev.map(profitColor), borderRadius: 4, maxBarThickness: 26 }];
-    if (cityVals.length) datasets.push({ label: 'רווחיות לפי שמאי העירייה', data: city, backgroundColor: city.map((v) => profitColor(v).replace('rgb', 'rgba').replace(')', ',0.45)')), borderColor: city.map(profitColor), borderWidth: 1.5, borderRadius: 4, maxBarThickness: 26 });
+    if (compare) datasets.push({ label: 'רווחיות לפי שמאי העירייה', data: city, backgroundColor: city.map((v) => (v === null ? 'rgba(0,0,0,0)' : profitColor(v).replace('rgb', 'rgba').replace(')', ',0.45)'))), borderColor: city.map((v) => (v === null ? 'rgba(0,0,0,0)' : profitColor(v))), borderWidth: 1.5, borderRadius: 4, maxBarThickness: 26 });
     const sorted = devGroups.slice().sort((a, b) => b.value - a.value);
+    const dated = sort === 'date' || focus;
     return {
-      chart: { labels, datasets, threshold: PROFIT_THRESHOLD, thresholdLabel: `בנצ'מרק ${PROFIT_THRESHOLD}%`, legend: true, frames, xTitle: sort === 'group' ? 'חוות דעת, מקובצות לפי יזם (שם הפרויקט ושנה)' : 'חוות דעת (יזם · פרויקט)', yTitle: 'שיעור רווחיות (%)' },
+      chart: {
+        labels, datasets, threshold: PROFIT_THRESHOLD, thresholdLabel: `בנצ'מרק ${PROFIT_THRESHOLD}%`, legend: true, frames,
+        missing: compare ? city.map((v) => v === null) : null,
+        direction: dated ? { right: 'ישן', left: 'חדש' } : sort === 'desc' ? { right: 'הגבוה', left: 'הנמוך' } : sort === 'asc' ? { right: 'הנמוך', left: 'הגבוה' } : null,
+        xTitle: focus ? `${focus}: חוות הדעת לפי תאריך, מהישנה (ימין) לחדשה (שמאל)`
+          : sort === 'date' ? 'חוות דעת לפי תאריך חוו״ד, מהישנה (ימין) לחדשה (שמאל) · חודש/שנה · יזם'
+          : sort === 'group' ? 'חוות דעת מקובצות לפי יזם. בתוך כל יזם: מהישנה לחדשה. לחיצה על מסגרת מבודדת אותה'
+          : sort === 'quarter' ? 'חוות דעת מקובצות לפי רובע. לחיצה על מסגרת מבודדת אותה'
+          : 'חוות דעת (יזם · פרויקט)',
+        yTitle: 'שיעור רווחיות (%)'
+      },
       summary: [
-        ['חוות דעת עם רווחיות', items.length], ['יזמים', devGroups.length],
-        ['ממוצע רווחיות לפי היזם', fmt(mean(items.map((d) => d.dev)))],
-        ['ממוצע רווחיות לפי העירייה', cityVals.length ? fmt(mean(cityVals)) : 'טרם הוזן']
+        ['חוות דעת עם רווחיות יזם', items.length], ['יזמים', devGroups.length],
+        [`ממוצע רווחיות לפי דוחות היזמים (כל ${items.length} חוו״ד)`, fmt(mean(items.map((d) => d.dev)))],
+        [`ממוצע רווחיות לפי שמאי העירייה (${cityVals.length} חוו״ד)`, cityVals.length ? fmt(mean(cityVals)) : 'טרם הוזן']
       ],
       insights: [
         `${devGroups.filter((r) => r.value > PROFIT_THRESHOLD).length} יזמים בממוצע מעל הבנצ'מרק (אדום), ${devGroups.filter((r) => r.value <= PROFIT_THRESHOLD).length} עד הבנצ'מרק (ירוק).`,
         `הרווחיות הממוצעת הגבוהה ביותר: ${sorted[0].name} (${fmt(sorted[0].value)}). הנמוכה ביותר: ${sorted[sorted.length - 1].name} (${fmt(sorted[sorted.length - 1].value)}).`,
-        ...(cityVals.length ? [] : ['עמודת רווחיות העירייה עדיין ריקה. כשתמולא, תופיע לצד כל עמודת יזם עמודה בהירה של העירייה ויחושב הפער.'])
+        `"ממוצע" ליד יזם הוא ממוצע רווחיות היזם בכל חוות הדעת שלו, בכל הפרויקטים שלו.`,
+        ...(cityVals.length ? [] : ['רווחיות העירייה עדיין לא הוזנה באף חוות דעת. בכפתור "השוואה יזם מול עירייה" כל מקום חסר מסומן בעמודה ריקה מקווקוות.'])
       ],
       details: sortRows(devGroups, 'desc'),
       detailKind: 'developer'
@@ -179,14 +196,14 @@ function buildAnalysis(tab, data, sort) {
     return {
       chart: {
         labels: ordered.map((r) => `${r.name} (${r.list.length})`),
-        datasets: [{ label: 'ממוצע רווחיות', data: ordered.map((r) => r.value), backgroundColor: ordered.map((r) => profitColor(r.value)), borderRadius: 4, maxBarThickness: 34 }],
+        datasets: [{ label: isDev ? 'ממוצע רווחיות בדוחות השמאי' : 'ממוצע רווחיות שקבע השמאי', data: ordered.map((r) => r.value), backgroundColor: ordered.map((r) => profitColor(r.value)), borderRadius: 4, maxBarThickness: 34 }],
         threshold: PROFIT_THRESHOLD, thresholdLabel: `בנצ'מרק ${PROFIT_THRESHOLD}%`,
         xTitle: isDev ? 'שמאי מטעם היזם (מספר חוות דעת)' : 'שמאי מטעם העירייה (מספר חוות דעת)', yTitle: 'ממוצע שיעור רווחיות (%)'
       },
       summary: [
         [isDev ? 'שמאי יזם' : 'שמאי עירייה', rows.length],
         ['חוות דעת', rows.reduce((a, r) => a + r.list.length, 0)],
-        ['ממוצע כולל', fmt(mean(avgs))],
+        ['ממוצע של ממוצעי השמאים', fmt(mean(avgs))],
         ['פיזור בין שמאים', spread.toFixed(1) + ' נק׳']
       ],
       insights: [
@@ -297,36 +314,103 @@ function Menu({ data }) {
   );
 }
 
+// Dashed empty slot wherever the city figure is missing, so the gap in the data is visible.
+const missingPlugin = (missing) => ({
+  id: 'missing',
+  afterDatasetsDraw(chart) {
+    if (!missing) return;
+    const meta = chart.getDatasetMeta(1);
+    if (!meta || !meta.data) return;
+    const { ctx, scales: { y } } = chart;
+    const top = y.getPixelForValue(PROFIT_THRESHOLD * 0.66);
+    const base = y.getPixelForValue(0);
+    ctx.save();
+    missing.forEach((m, i) => {
+      const el = meta.data[i];
+      if (!m || !el || !isFinite(el.x)) return;
+      const w = el.width || 14;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(28,29,32,0.45)';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(el.x - w / 2, top, w, base - top);
+      ctx.setLineDash([]);
+      ctx.save();
+      ctx.translate(el.x, (top + base) / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = 'rgba(28,29,32,0.6)';
+      ctx.font = "500 10px 'IBM Plex Sans Hebrew', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (w >= 9) ctx.fillText('חסר', 0, 0);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+});
+
+// Spells out which end of the axis is which (old/new, high/low).
+const directionPlugin = (dir) => ({
+  id: 'direction',
+  afterDraw(chart) {
+    if (!dir) return;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.font = "600 12px 'IBM Plex Sans Hebrew', sans-serif";
+    ctx.fillStyle = '#1c1d20';
+    ctx.textBaseline = 'bottom';
+    const y = chart.height - 4;
+    ctx.textAlign = 'right';
+    ctx.fillText(`${dir.right} →`, chartArea.right, y);
+    ctx.textAlign = 'left';
+    ctx.fillText(`← ${dir.left}`, chartArea.left, y);
+    ctx.restore();
+  }
+});
+
 function ChartPage({ tab, data }) {
   const canvasRef = useRef(null);
   const [sort, setSort] = useState(tab.sorts[0][0]);
   const [open, setOpen] = useState(null);
-  const analysis = useMemo(() => buildAnalysis(tab.id, data, sort), [tab.id, data, sort]);
+  const [compare, setCompare] = useState(false);
+  const [focus, setFocus] = useState(null);
+  const analysis = useMemo(() => buildAnalysis(tab.id, data, sort, { compare, focus }), [tab.id, data, sort, compare, focus]);
 
   useEffect(() => {
     if (!analysis.chart || !canvasRef.current) return undefined;
-    const { labels, datasets, threshold, thresholdLabel, legend, unit, frames, xTitle, yTitle, allowNegative } = analysis.chart;
+    const { labels, datasets, threshold, thresholdLabel, legend, unit, frames, xTitle, yTitle, allowNegative, missing, direction } = analysis.chart;
     const chart = new Chart(canvasRef.current, {
       type: 'bar',
       data: { labels, datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: frames ? 18 : 6 } },
-        animation: { duration: 800, easing: 'easeOutQuart' },
+        layout: { padding: { top: frames ? 18 : 6, bottom: direction ? 18 : 0 } },
+        animation: { duration: 700, easing: 'easeOutQuart' },
+        onHover: (evt, els, c) => {
+          if (!frames) return;
+          const xs = c.scales.x;
+          const idx = xs.getValueForPixel(evt.x);
+          c.canvas.style.cursor = frames.some((f) => idx >= f.start && idx <= f.end) ? 'zoom-in' : 'default';
+        },
+        onClick: (evt, els, c) => {
+          if (!frames) return;
+          const idx = Math.round(c.scales.x.getValueForPixel(evt.x));
+          const f = frames.find((g) => idx >= g.start && idx <= g.end);
+          if (f) setFocus(f.name);
+        },
         plugins: {
           legend: {
             display: !!legend, position: 'top', rtl: true,
             labels: {
-              boxWidth: 14, boxHeight: 14, padding: 16,
+              boxWidth: 14, boxHeight: 14, padding: 16, font: { size: 13 },
               // Bar colour encodes risk, so the legend swatch only distinguishes the two sources.
-              generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({
+              generateLabels: (ch) => ch.data.datasets.map((ds, i) => ({
                 text: ds.label,
                 fillStyle: i === 0 ? 'rgba(28,29,32,0.7)' : 'rgba(28,29,32,0.12)',
                 strokeStyle: 'rgba(28,29,32,0.7)',
                 lineWidth: i === 0 ? 0 : 1.5,
                 datasetIndex: i,
-                hidden: !chart.isDatasetVisible(i)
+                hidden: !ch.isDatasetVisible(i)
               }))
             }
           },
@@ -334,24 +418,26 @@ function ChartPage({ tab, data }) {
             rtl: true,
             backgroundColor: '#1c1d20',
             padding: 10,
+            titleFont: { size: 13 },
+            bodyFont: { size: 13 },
             callbacks: {
-              label: (c) => (c.parsed.y === null ? `${c.dataset.label}: אין נתון`
+              label: (c) => (c.parsed.y === null || isNaN(c.parsed.y) ? `${c.dataset.label}: חסר, טרם הוזן`
                 : unit === 'days' ? `${formatDuration(c.parsed.y)}`
                 : `${c.dataset.label}: ${allowNegative && c.parsed.y > 0 ? '+' : ''}${c.parsed.y.toFixed(1)}${allowNegative ? ' נק׳' : '%'}`)
             }
           }
         },
         scales: {
-          x: { reverse: true, grid: { display: false }, ticks: { maxRotation: 60, autoSkip: false, font: { size: 10 } },
-            title: { display: true, text: xTitle, font: { size: 12, weight: '500' }, color: '#33353a' } },
-          y: { position: 'right', beginAtZero: true, grid: { color: 'rgba(28,29,32,0.06)' }, border: { display: false },
-            title: { display: true, text: yTitle, font: { size: 12, weight: '500' }, color: '#33353a' } }
+          x: { reverse: true, grid: { display: false }, ticks: { maxRotation: 60, autoSkip: false, font: { size: focus ? 12 : 11 }, color: '#33353a' },
+            title: { display: true, text: xTitle, font: { size: 13, weight: '600' }, color: '#1c1d20' } },
+          y: { position: 'right', beginAtZero: true, grid: { color: 'rgba(28,29,32,0.07)' }, border: { display: false }, ticks: { font: { size: 12 }, color: '#33353a' },
+            title: { display: true, text: yTitle, font: { size: 13, weight: '600' }, color: '#1c1d20' } }
         }
       },
-      plugins: [groupFramePlugin(frames), thresholdPlugin(threshold, thresholdLabel)]
+      plugins: [groupFramePlugin(frames), thresholdPlugin(threshold, thresholdLabel), missingPlugin(missing), directionPlugin(direction)]
     });
     return () => chart.destroy();
-  }, [analysis]);
+  }, [analysis, focus]);
 
   return (
     <div className="page">
@@ -378,11 +464,32 @@ function ChartPage({ tab, data }) {
               <span className="label">סידור הגרף</span>
               <div className="seg-control" role="radiogroup" aria-label="סידור הגרף">
                 {tab.sorts.map(([v, l]) => (
-                  <button key={v} role="radio" aria-checked={sort === v} className={sort === v ? 'on' : ''} onClick={() => setSort(v)}>{l}</button>
+                  <button key={v} role="radio" aria-checked={sort === v} className={sort === v ? 'on' : ''} onClick={() => { setSort(v); setFocus(null); }}>{l}</button>
                 ))}
               </div>
+              {tab.id === 'gap' && (
+                <button className={`btn btn-sm ${compare ? 'btn-primary' : 'btn-ghost'} compare-btn`} aria-pressed={compare} onClick={() => setCompare(!compare)}>
+                  {compare ? 'סגירת ההשוואה' : 'השוואה יזם מול עירייה'}
+                </button>
+              )}
             </div>
-            <div className="chart-box"><canvas ref={canvasRef} aria-label={tab.title} role="img" /></div>
+            <AnimatePresence>
+              {focus && (
+                <motion.div className="focus-bar" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease }}>
+                  <span>מבודד: <b>{focus}</b> · {analysis.chart?.labels.length} חוות דעת</span>
+                  <button className="btn btn-sm btn-primary" onClick={() => setFocus(null)}>חזרה לגרף המלא</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {compare && (
+              <p className="hint compare-hint">
+                עמודה מלאה: רווחיות לפי דוח היזם. עמודה בהירה לידה: רווחיות לפי שמאי העירייה. מלבן מקווקו עם המילה "חסר": רווחיות העירייה טרם הוזנה בחוות הדעת.
+              </p>
+            )}
+            <motion.div className={`chart-box${focus ? ' chart-box-focus' : ''}`} key={focus || 'all'} initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease }}>
+              <canvas ref={canvasRef} aria-label={tab.title} role="img" />
+            </motion.div>
+            {analysis.chart?.frames && <p className="hint">לחיצה על מסגרת בגרף מבודדת ומגדילה אותה.</p>}
           </section>
           <section className="insight-grid">
             <div className="panel">
@@ -418,6 +525,29 @@ function Arrow({ v }) {
     : <span className="arrow arrow-down" title="עד הבנצ'מרק">↓</span>;
 }
 
+const AVG_OF = {
+  developer: 'ממוצע רווחיות היזם בכל חוות הדעת שלו',
+  appraiser: 'ממוצע הרווחיות בחוות הדעת של השמאי',
+  pair: 'ממוצע הפער בחוות הדעת של הצמד',
+  turnaround: 'ממוצע זמן הטיפול'
+};
+
+function OpinionLine({ x, kind }) {
+  return (
+    <li>
+      <span className="mono detail-date">{dstr(dateOf(x))}</span>
+      {kind !== 'developer' && <a className="project-name" href={`#/p/${x.projectId}`}>{x.plan || x.address}</a>}
+      {kind !== 'developer' && <span className="muted">יזם: {x.developer}</span>}
+      <span className="detail-pair">
+        <span><span className="role">יזם</span> <b style={{ color: profitColor(x.dev) }}>{fmt(x.dev)}</b></span>
+        <span><span className="role">עירייה</span> <b style={{ color: profitColor(x.city) }}>{x.city === null ? 'חסר' : fmt(x.city)}</b></span>
+        {x.gap !== null && <span><span className="role">פער</span> <b dir="ltr" style={{ color: gapColor(x.gap) }}>{x.gap > 0 ? '+' : ''}{x.gap.toFixed(1)}</b></span>}
+        {kind === 'turnaround' && x.turnaround !== null && <span><span className="role">משך</span> <b>{formatDuration(x.turnaround)}</b></span>}
+      </span>
+    </li>
+  );
+}
+
 function DetailRow({ d, kind, open, onToggle }) {
   const value = kind === 'turnaround' ? formatDuration(Math.round(d.value))
     : kind === 'pair' ? <><bdi dir="ltr">{`${d.value > 0 ? '+' : ''}${d.value.toFixed(1)}`}</bdi> נק׳</>
@@ -425,35 +555,36 @@ function DetailRow({ d, kind, open, onToggle }) {
   const color = kind === 'turnaround' ? undefined : kind === 'pair' ? gapColor(d.value) : profitColor(d.value);
   const trend = d.list.filter((x) => x.dev !== null).map((x) => x.dev);
   const delta = trend.length > 1 ? trend[trend.length - 1] - trend[0] : null;
+  // A developer's opinions, split by project so several projects stay distinguishable.
+  const projects = kind === 'developer' ? groupBy(d.list, (x) => x.projectId).map((g) => ({
+    id: g.name, name: g.list[0].plan || g.list[0].address, list: g.list, avg: mean(g.list.map((x) => x.dev).filter((v) => v !== null))
+  })) : null;
   return (
     <li className={`detail${open ? ' detail-open' : ''}`}>
       <button className="detail-head" onClick={onToggle} aria-expanded={open}>
         <span className="detail-caret" aria-hidden="true">{open ? '−' : '+'}</span>
         <span className="strong">{d.name}</span>
         <span className="muted detail-meta">
-          {d.list.length} חוו״ד · ממוצע{kind === 'developer' && delta !== null ? ` · מגמה ${delta > 0 ? 'עלייה' : delta < 0 ? 'ירידה' : 'יציבה'} ${Math.abs(delta).toFixed(1)} נק׳ מהראשונה לאחרונה` : ''}
+          {AVG_OF[kind]} · {d.list.length} חוו״ד{projects ? ` ב־${projects.length} ${projects.length === 1 ? 'פרויקט' : 'פרויקטים'}` : ''}
+          {kind === 'developer' && delta !== null ? ` · מגמה: ${delta > 0 ? 'עלייה' : delta < 0 ? 'ירידה' : 'יציבה'} של ${Math.abs(delta).toFixed(1)} נק׳ מהראשונה לאחרונה` : ''}
         </span>
         <span className="mono details-value" style={{ color }}>
-          {value} {kind !== 'turnaround' && kind !== 'pair' && <Arrow v={d.value} />}
+          <span className="avg-tag">ממוצע</span> {value} {kind !== 'turnaround' && kind !== 'pair' && <Arrow v={d.value} />}
         </span>
       </button>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.ol className="detail-list" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease }}>
-            {d.list.map((x) => (
-              <li key={x.opinionId}>
-                <span className="mono detail-date">{dstr(dateOf(x))}</span>
-                <a className="project-name" href={`#/p/${x.projectId}`}>{x.plan || x.address}</a>
-                {kind !== 'developer' && <span className="muted">יזם: {x.developer}</span>}
-                <span className="detail-pair">
-                  <span><span className="role">יזם</span> <b style={{ color: profitColor(x.dev) }}>{fmt(x.dev)}</b></span>
-                  <span><span className="role">עירייה</span> <b style={{ color: profitColor(x.city) }}>{fmt(x.city)}</b></span>
-                  {x.gap !== null && <span><span className="role">פער</span> <b dir="ltr" style={{ color: gapColor(x.gap) }}>{x.gap > 0 ? '+' : ''}{x.gap.toFixed(1)}</b></span>}
-                  {kind === 'turnaround' && x.turnaround !== null && <span><span className="role">משך</span> <b>{formatDuration(x.turnaround)}</b></span>}
-                </span>
-              </li>
-            ))}
-          </motion.ol>
+          <motion.div className="detail-body" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease }}>
+            {projects ? projects.map((pr, i) => (
+              <div key={pr.id} className={`detail-project dp-${i % 4}`}>
+                <div className="detail-project-head">
+                  <a className="project-name" href={`#/p/${pr.id}`}>{pr.name}</a>
+                  <span className="muted">{pr.list.length} חוו״ד{pr.avg !== null ? <> · ממוצע רווחיות יזם בפרויקט <b style={{ color: profitColor(pr.avg) }}>{fmt(pr.avg)}</b></> : ''}</span>
+                </div>
+                <ol className="detail-list">{pr.list.map((x) => <OpinionLine key={x.opinionId} x={x} kind={kind} />)}</ol>
+              </div>
+            )) : <ol className="detail-list">{d.list.map((x) => <OpinionLine key={x.opinionId} x={x} kind={kind} />)}</ol>}
+          </motion.div>
         )}
       </AnimatePresence>
     </li>
