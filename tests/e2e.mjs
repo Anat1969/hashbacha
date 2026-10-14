@@ -222,7 +222,7 @@ try {
   ok((lastCall('hb_save_settings')?.params.p_settings.contacts || []).some((c) => c.email === 'saul@example.org'), 'address saved to contacts');
   const sent = lastCall('hb_upsert_note').params.p_data;
   ok(sent.kind === 'mail_out' && sent.project_id && sent.meta.subject.startsWith('תזכורת') && sent.meta.to === 'saul@example.org', 'sent mail filed to the project with date, subject and recipient');
-  ok(await page.isVisible('a.btn-claude[href^="https://claude.ai/code/"]'), 'Claude Code button in header');
+  ok((await page.locator('.topbar a.btn-claude, .topbar button:has-text("התקנה כאפליקציה")').count()) === 0, 'header has no install / Claude buttons');
   ok(await page.evaluate(() => !!document.querySelector('link[rel=manifest]')), 'installable app manifest linked');
   ok(!(await page.isVisible('.chrome-banner')), 'no Chrome banner inside Chrome');
 
@@ -409,6 +409,8 @@ try {
   ok(lastCall('hb_save_settings').params.p_settings.contacts.some((c) => c.name === 'אייל דנינו' && c.role === 'שמאי יזם'), 'contact saved');
   ok(lastCall('hb_save_settings').params.p_settings.researchUrl === 'https://claude.ai/project/research-test', 'Claude research project link saved');
   await page.click('button:has-text("הגדרות")');
+  ok(await page.isVisible('.modal a.btn-claude[href^="https://claude.ai/code/"]'), 'Settings: "עריכה ושדרוג ב־Claude"');
+  ok((await page.locator('.modal .install-status, .modal button:has-text("התקנה כאפליקציה")').count()) === 1, 'Settings: install-in-Chrome button or how-to');
   ok((await page.getAttribute('.modal a:has-text("פתיחת פרויקט המחקר ב־Claude")', 'href')) === 'https://claude.ai/project/research-test', 'Settings opens the Claude research project');
   await page.keyboard.press('Escape');
   await page.waitForSelector('.modal', { state: 'detached' });
@@ -544,6 +546,28 @@ try {
   await launcher.saveAs(lp);
   ok(readFileSync(lp, 'utf8').includes('start "" chrome "http://localhost:4173/?k=HB-TEST-TEST-TEST"'), 'Windows launcher opens the app in Chrome');
   await edgeCtx.close();
+
+  console.log('Guide');
+  await page.goto(`${BASE}/?k=${KEY}#/guide`);
+  await page.waitForSelector('.guide-section');
+  ok(await page.isVisible('.nav-link.active:has-text("מדריך")'), 'main menu has "מדריך"');
+  for (const t of ['חזון ומטרה', 'המסלול בשישה צעדים', 'קלט ופלט', 'הלוגיקה של בקרת השומה', 'איך מתבצעת התקשורת', 'מי עושה מה', 'איך הכול מתחבר', 'צעדים ראשונים']) {
+    ok(await page.isVisible(`.guide-section h2:has-text("${t}")`), `guide section: ${t}`);
+  }
+  ok((await page.locator('.guide-flow li').count()) === 6, 'guide: six-step flow');
+  await page.click('.guide-toc button:has-text("מי עושה מה")');
+  await page.waitForTimeout(800);
+  ok(await page.evaluate(() => document.getElementById('guide-roles').getBoundingClientRect().top < 300), 'table of contents scrolls to the section');
+  await page.screenshot({ path: `${SHOTS}/g1-guide.png`, fullPage: true });
+  const anon = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'he-IL' });
+  const ap = await anon.newPage();
+  await ap.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await ap.goto(BASE);
+  await ap.waitForSelector('.gate-card');
+  await ap.click('.gate-help a:has-text("מדריך למשתמש")');
+  await ap.waitForSelector('.guide-section');
+  ok(await ap.isVisible('a.guide-enter'), 'guide opens without a code from the entry screen');
+  await anon.close();
 
   // ===== Appraisal review module =====
   console.log('Review: top-level overview');
@@ -715,7 +739,7 @@ try {
   await m.page.click('.modal button:has-text("ביטול")');
   await m.page.click('button:has-text("חוות דעת חדשה")');
   await noHorizontalScroll(m.page, 'new opinion form');
-  for (const path of ['#/s', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
+  for (const path of ['#/s', '#/guide', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
     await m.page.goto(`${BASE}/${path}`);
     await m.page.waitForTimeout(900);
     await noHorizontalScroll(m.page, path);
