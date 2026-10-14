@@ -23,7 +23,7 @@ function MailBody({ n }) {
       <p className="mail-party">
         {n.kind === 'mail_in' ? <><span className="role">מאת:</span> {m.from || '—'}</> : <><span className="role">אל:</span> {m.to || m.from || '—'}</>}
         {m.role && <span className="party-role">{m.role}</span>}
-        {m.external ? <span className="muted"> · תויק מתיבת הדואר</span> : <span className="muted"> · נשלח מהמערכת{m.via ? ` (${({ gmail: 'Gmail', outlook: 'Outlook', mailto: 'תוכנת דואר', copy: 'הועתק' })[m.via] || m.via})` : ''}</span>}
+        {m.external ? <span className="muted"> · תויק מתיבת הדואר</span> : <span className="muted"> · נשלח (אושר){m.via ? ` · ${({ gmail: 'Gmail', outlook: 'Outlook', mailto: 'תוכנת דואר', copy: 'הועתק ונשלח' })[m.via] || m.via}` : ''}</span>}
       </p>
       {n.body && <p className={`note-body mail-text${open || !long ? '' : ' clamp'}`}>{n.body}</p>}
       {long && <button className="link-btn" onClick={() => setOpen(!open)}>{open ? 'הצג פחות' : 'הצג את כל המייל'}</button>}

@@ -112,3 +112,16 @@ export function outlookHref({ to, subject, text }) {
 export function mailtoHref({ to, subject, text }) {
   return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
 }
+
+// Longest compose link each service accepts. Hebrew letters encode to six characters each, and Outlook
+// re-encodes the link through the Microsoft sign-in page (AADSTS90015), so long letters cannot travel in the URL.
+export const LINK_LIMIT = { gmail: 6000, outlook: 1500, mailto: 1800 };
+export const PASTE_LINE = 'הנוסח המלא הועתק. הדביקו כאן: Ctrl+V';
+const BUILD = { gmail: gmailHref, outlook: outlookHref, mailto: mailtoHref };
+
+// { href, trimmed }: trimmed = the body did not fit, so it goes through the clipboard instead.
+export function composeHref(service, draft) {
+  const full = BUILD[service](draft);
+  if (full.length <= LINK_LIMIT[service]) return { href: full, trimmed: false };
+  return { href: BUILD[service]({ ...draft, text: PASTE_LINE }), trimmed: true };
+}

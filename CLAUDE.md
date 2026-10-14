@@ -27,7 +27,8 @@
 - `hb_notes` (kinds: todo/ask/remember/note, optional project_id, due, done). Project card shows filed notes plus a merged timeline of opinion events and dated note lines.
 - Every mail opens in `MailComposer` for editing first, then Gmail / Outlook web / mailto / copy. Browsers cannot be forced to Chrome; web compose opens in the current browser.
 - Contacts live in `hb_settings.data.contacts` [{name, role, email}]; an address typed in a draft is saved there.
-- Every mail sent from the app is filed as `hb_notes` kind `mail_out` (meta: to, subject, via, date). Incoming or external mails are filed by paste (`MailLog`, parser in `src/lib/mailParse.js`) as `mail_in` with sender role and project auto-guessed. No mailbox integration yet (no approval).
+- Opening a mail service never counts as sent: the composer asks "נשלח, לתייק" / "לא נשלח" and files only on confirmation (user feedback 2026-10-14). Compose links go through `composeHref` (Gmail 6000 / Outlook 1500 / mailto 1800 chars); a longer body is copied to the clipboard and the link carries only to + subject + a paste line.
+- Every mail confirmed as sent is filed as `hb_notes` kind `mail_out` (meta: to, subject, via, date). Incoming or external mails are filed by paste (`MailLog`, parser in `src/lib/mailParse.js`) as `mail_in` with sender role and project auto-guessed. No mailbox integration yet (no approval).
 - Project file timeline: dots legend (event / opinion note / note / mail out / mail in), click a legend key to filter; newest first.
 
 ## Analytics
@@ -37,7 +38,7 @@
 
 ## Testing
 
-`npm run build && npm test` (20 review-logic checks + 166 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (24 logic checks + 171 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 Mocks must return exactly the shape the SQL function returns (2026-10-14: `hb_review_get` returned `id` while the mock returned `_id`, so every review write failed live). The mock answers 404 PGRST202 when a required RPC parameter is missing.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
