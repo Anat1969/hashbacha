@@ -270,6 +270,10 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
         <p className="hint">
           התבנית האחידה: גיליון ראשון, שורות "סוג דוח" (יזם / עירייה / ייחוס), שם הפרויקט, מיקום, תכנית משביחה, שם השמאי ותאריך השומה,
           ואחריהן טבלה שמתחילה ב"קוד" עם 22 השורות r1–r22. <a className="link-btn" href="/templates/template.xlsx" download="תבנית-דוח-שמאי.xlsx">הורדת תבנית ריקה לשמאים</a>
+          {' · '}קבצי דוגמה לבדיקה (נתונים בדויים):{' '}
+          <a className="link-btn" href="/templates/sample-developer.xlsx" download="דוגמה-שמאי-היזם.xlsx">יזם</a>{' / '}
+          <a className="link-btn" href="/templates/sample-reference.xlsx" download="דוגמה-ייחוס.xlsx">ייחוס</a>{' / '}
+          <a className="link-btn" href="/templates/sample-municipality.xlsx" download="דוגמה-שמאי-העירייה.xlsx">עירייה</a>
         </p>
         <dl className="facts review-facts">
           {[
