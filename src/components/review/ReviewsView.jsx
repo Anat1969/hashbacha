@@ -4,7 +4,7 @@ import { api } from '../../lib/api.js';
 import { REVIEW_STATUS } from '../../lib/review/rules.js';
 import { ease } from '../ui.jsx';
 import { ReviewPill } from './ReviewPill.jsx';
-import { readAuthor, ResearchLink } from './ReviewTab.jsx';
+import { readAuthor } from './ReviewTab.jsx';
 
 const projectName = (p) => p['שם התכנית'] || p['כתובת הפרויקט'] || 'ללא שם';
 
@@ -73,9 +73,6 @@ export default function ReviewsView({ ctx }) {
           <div>
             <span className="label">{shown.length} חוות דעת · לחיצה על "פתיחת ההשוואה" עוברת ללשונית "שומות השבחה" בכרטיס הפרויקט</span>
             <h2 className="display-s">בקרות לפי פרויקט</h2>
-          </div>
-          <div className="panel-actions">
-            <ResearchLink ctx={ctx} />
           </div>
         </div>
         <div className="chips" role="group" aria-label="סינון בקרות">

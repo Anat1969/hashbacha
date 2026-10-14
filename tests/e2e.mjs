@@ -82,7 +82,16 @@ function handle(name, p) {
 }
 
 // Review RPCs: same status rules as the SQL functions.
+// Required parameters per review RPC, as PostgREST matches them: a missing key → 404 PGRST202.
+const REVIEW_REQUIRED = {
+  hb_review_open: ['p_key', 'p_project', 'p_opinion'], hb_review_get: ['p_key', 'p_review'], hb_review_file: ['p_key', 'p_file'],
+  hb_review_import: ['p_key', 'p_review', 'p_slot', 'p_file', 'p_parsed'], hb_review_set_ref: ['p_key', 'p_review', 'p_row', 'p_value', 'p_src'],
+  hb_review_set_value: ['p_key', 'p_review', 'p_row', 'p_slot', 'p_value', 'p_note'], hb_review_mark: ['p_key', 'p_review', 'p_row', 'p_verdict', 'p_comment'],
+  hb_review_status: ['p_key', 'p_review', 'p_status'], hb_review_new_round: ['p_key', 'p_review'], hb_review_approve: ['p_key', 'p_review']
+};
 function reviewRpc(name, p) {
+  const missing = (REVIEW_REQUIRED[name] || []).filter((k) => !(k in p));
+  if (missing.length) return { status: 404, body: { code: 'PGRST202', message: `Could not find the function public.${name} (missing ${missing.join(', ')})` } };
   const isWrite = name !== 'hb_review_get' && name !== 'hb_review_file';
   if (name.startsWith('hb_review_') && isWrite && db.role === 'viewer') return { status: 400, body: { code: 'P0001', message: 'hb_readonly' } };
   const rv = db.reviews.find((r) => r._id === p.p_review);
@@ -96,7 +105,7 @@ function reviewRpc(name, p) {
     }
     case 'hb_review_get': {
       if (!rv) return { status: 400, body: { message: 'hb_not_found' } };
-      return { body: { ...rv, files: rv.files.filter((f) => !f.deleted).map(({ content_b64, ...f }) => f), rounds: db.reviews.filter((x) => x.project_id === rv.project_id && x.opinion_id === rv.opinion_id).map((x) => ({ _id: x._id, round: x.round, status: x.status })) } };
+      return { body: { ...rv, id: rv._id, files: rv.files.filter((f) => !f.deleted).map(({ content_b64, ...f }) => f), rounds: db.reviews.filter((x) => x.project_id === rv.project_id && x.opinion_id === rv.opinion_id).map((x) => ({ _id: x._id, round: x.round, status: x.status })) } };
     }
     case 'hb_review_file': { const f = db.reviews.flatMap((r) => r.files).find((x) => x._id === p.p_file); return { body: { file_name: f.file_name, content_b64: f.content_b64 } }; }
     case 'hb_review_import': {
@@ -386,6 +395,10 @@ try {
   await page.waitForSelector('.modal', { state: 'detached' });
   ok(lastCall('hb_save_settings').params.p_settings.contacts.some((c) => c.name === 'אייל דנינו' && c.role === 'שמאי יזם'), 'contact saved');
   ok(lastCall('hb_save_settings').params.p_settings.researchUrl === 'https://claude.ai/project/research-test', 'Claude research project link saved');
+  await page.click('button:has-text("הגדרות")');
+  ok((await page.getAttribute('.modal a:has-text("פתיחת פרויקט המחקר ב־Claude")', 'href')) === 'https://claude.ai/project/research-test', 'Settings opens the Claude research project');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.modal', { state: 'detached' });
 
   console.log('Analytics');
   await page.click('.nav-link:has-text("ניתוח")');
@@ -568,6 +581,7 @@ try {
   ok((await page.locator('.table-review thead th').allTextContents()).slice(0, 5).join('|') === 'פרמטר|שמאי היזם|ייחוס ומקור|שמאי העירייה|טווח קביל', 'table columns: parameter | developer | reference | municipality | tolerance');
   ok(await page.isVisible('tr[data-row="r18"] td.col-ref >> text=נוהג שוק'), 'reference column shows the source');
   const imp = calls.filter((c) => c.name === 'hb_review_import').map((c) => c.params);
+  ok(calls.filter((c) => /^hb_review_(import|get|mark|set_ref)$/.test(c.name)).every((c) => typeof c.params.p_review === 'string' && c.params.p_review.length > 10), 'every review call sends p_review');
   ok(imp.map((c) => c.p_slot).join() === 'D,M,N', 'imports go to slots D, M, N');
   ok(typeof imp[0].p_parsed.r5.v === 'number' && imp[0].p_file.content_b64.length > 100 && imp[0].p_actor === 'ענת', 'import payload: parsed values, file, reviewer name');
   ok(await page.isVisible('.detail-badges .pill:has-text("הדוחות נקלטו")'), 'status: reports imported');
@@ -590,7 +604,7 @@ try {
   ok(lastCall('hb_review_set_ref').params.p_row === 'r18' && lastCall('hb_review_set_ref').params.p_src === 'נוהג שוק 2026', 'reference edit saves row + source');
   ok(lastCall('hb_review_set_value').params.p_row === 'r20' && lastCall('hb_review_set_value').params.p_slot === 'M' && lastCall('hb_review_set_value').params.p_value === 6.25, 'manual correction of the city report value');
   ok((await page.getAttribute('a:has-text("הורדת תבנית ריקה")', 'href')) === '/templates/template.xlsx', 'blank template download link');
-  ok((await page.getAttribute('a:has-text("פרויקט המחקר ב־Claude")', 'href')) === 'https://claude.ai/project/research-test', 'button opens the Claude research project');
+  ok((await page.locator('a:has-text("פרויקט המחקר ב־Claude")').count()) === 0, 'research link is not on the review pages (Settings only)');
   ok((await page.textContent('.review-facts')).includes('שמאי היזם (בדוי)'), 'appraiser names from the imported files');
   ok(await page.isDisabled('button:has-text("אישור הבקרה")'), 'approve disabled until all 22 rows are ✓');
   await page.screenshot({ path: `${SHOTS}/r2-review-compare.png`, fullPage: true });
