@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Field, Modal } from './ui.jsx';
 import { api } from '../lib/api.js';
-import { gmailHref, mailtoHref, outlookHref } from '../lib/mail.js';
+import { composeHref } from '../lib/mail.js';
 import { REPORT_FIELDS } from '../lib/calc.js';
 
 // Every mail opens here first, editable, then goes out through the mail service the user prefers.
@@ -9,12 +9,14 @@ export default function MailComposer({ request, onClose, ctx }) {
   const [draft, setDraft] = useState(null);
   const [picked, setPicked] = useState([]);
   const [saveContact, setSaveContact] = useState(true);
+  const [opened, setOpened] = useState(null); // { via } once the mail was opened elsewhere, awaiting "sent?"
 
   useEffect(() => {
     if (!request) { setDraft(null); return; }
     setDraft(request.build(request.picked));
     setPicked(request.picked || []);
     setSaveContact(true);
+    setOpened(null);
   }, [request]);
 
   if (!request || !draft) return <Modal open={false} title="" onClose={onClose} />;
@@ -42,7 +44,7 @@ export default function MailComposer({ request, onClose, ctx }) {
   async function fileSent(via) {
     let author = '';
     try { author = localStorage.getItem('hashbacha-author') || ''; } catch { /* storage blocked */ }
-    await ctx.mutate((k) => api.saveNote(k, null, {
+    return ctx.mutate((k) => api.saveNote(k, null, {
       kind: 'mail_out',
       body: draft.text,
       author,
@@ -51,18 +53,35 @@ export default function MailComposer({ request, onClose, ctx }) {
     }));
   }
 
-  async function send(kind) {
-    await rememberContact();
-    await fileSent(kind);
-    if (request.onSent) await request.onSent(kind, draft);
-    ctx.toast(kind === 'copy' ? 'נוסח המייל הועתק ותויק בתיק הפרויקט' : 'המייל נפתח לשליחה ותויק בתיק הפרויקט', 'ok');
-    onClose();
+  const VIA = { gmail: 'Gmail', outlook: 'Outlook', mailto: 'תוכנת הדואר', copy: 'העתקה' };
+  const links = { gmail: composeHref('gmail', draft), outlook: composeHref('outlook', draft), mailto: composeHref('mailto', draft) };
+
+  // Opening only opens: nothing is filed until the user confirms the mail really went out.
+  async function openIn(e, via) {
+    const link = links[via];
+    if (link.trimmed) {
+      e.preventDefault();
+      try { await navigator.clipboard.writeText(draft.text); }
+      catch { ctx.toast('המייל ארוך מדי לקישור, וההעתקה האוטומטית נחסמה. סמני את התוכן, העתיקי, ונסי שוב.', 'error'); return; }
+      if (via === 'mailto') window.location.href = link.href; else window.open(link.href, '_blank', 'noopener');
+      ctx.toast(`המייל ארוך מדי לקישור, ולכן הנוסח המלא הועתק. בחלון של ${VIA[via]}: Ctrl+V בגוף המייל.`, 'info');
+    }
+    setOpened({ via, trimmed: link.trimmed });
   }
 
   async function copy() {
     const full = `אל: ${draft.to}\nנושא: ${draft.subject}\n\n${draft.text}`;
-    try { await navigator.clipboard.writeText(full); send('copy'); }
+    try { await navigator.clipboard.writeText(full); setOpened({ via: 'copy' }); }
     catch { ctx.toast('לא ניתן להעתיק אוטומטית. סמני את הטקסט והעתיקי ידנית.', 'error'); }
+  }
+
+  async function confirmSent() {
+    await rememberContact();
+    const res = await fileSent(opened.via);
+    if (res === null) return;
+    if (request.onSent) await request.onSent(opened.via, draft);
+    ctx.toast('המייל תויק כנשלח בתיק הפרויקט', 'ok');
+    onClose();
   }
 
   return (
@@ -71,18 +90,32 @@ export default function MailComposer({ request, onClose, ctx }) {
       wide
       title={draft.title}
       onClose={onClose}
-      actions={
+      actions={opened ? (
         <>
-          <a className="btn btn-primary" href={gmailHref(draft)} target="_blank" rel="noreferrer" onClick={() => send('gmail')}>פתח ב־Gmail</a>
-          <a className="btn btn-ghost" href={outlookHref(draft)} target="_blank" rel="noreferrer" onClick={() => send('outlook')}>פתח ב־Outlook</a>
-          <a className="btn btn-ghost" href={mailtoHref(draft)} onClick={() => send('mailto')}>תוכנת הדואר במחשב</a>
+          <span className="mail-confirm">
+            {opened.via === 'copy' ? 'הנוסח הועתק.' : `המייל נפתח ב־${VIA[opened.via]}${opened.trimmed ? ', והנוסח המלא הועתק להדבקה' : ''}.`} אחרי השליחה שם, לסמן כאן:
+          </span>
+          <button className="btn btn-primary" onClick={confirmSent}>נשלח, לתייק</button>
+          <button className="btn btn-ghost" onClick={() => setOpened(null)}>לא נשלח, חזרה לעריכה</button>
+          <span className="spacer" />
+          <button className="btn btn-ghost btn-quiet" onClick={onClose}>סגירה בלי לתייק</button>
+        </>
+      ) : (
+        <>
+          <a className="btn btn-primary" href={links.gmail.href} target="_blank" rel="noreferrer" onClick={(e) => openIn(e, 'gmail')}>פתח ב־Gmail</a>
+          <a className="btn btn-ghost" href={links.outlook.href} target="_blank" rel="noreferrer" onClick={(e) => openIn(e, 'outlook')}>פתח ב־Outlook</a>
+          <a className="btn btn-ghost" href={links.mailto.href} onClick={(e) => openIn(e, 'mailto')}>תוכנת הדואר במחשב</a>
           <button className="btn btn-ghost" onClick={copy}>העתק נוסח</button>
           <span className="spacer" />
           <button className="btn btn-ghost btn-quiet" onClick={onClose}>ביטול</button>
         </>
-      }
+      )}
     >
-      <p className="hint hint-top">הנוסח מוכן לעריכה. אפשר לשנות כל מילה לפני השליחה. המייל ייפתח בלשונית חדשה בדפדפן.</p>
+      <p className="hint hint-top">
+        הנוסח מוכן לעריכה. אפשר לשנות כל מילה לפני השליחה. המייל ייפתח בלשונית חדשה בדפדפן, והשליחה עצמה נעשית שם.
+        המייל יתויק בתיק רק אחרי שתסמני "נשלח".
+        {(links.gmail.trimmed || links.outlook.trimmed) && ' המייל ארוך: בפתיחה הנוסח המלא יועתק, ויש להדביק אותו (Ctrl+V) בגוף המייל.'}
+      </p>
       <div className="mail-form">
         <Field label="אל">
           <input className="input" dir="ltr" value={draft.to} placeholder="כתובת מייל" aria-label="נמען"
