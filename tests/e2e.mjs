@@ -21,7 +21,9 @@ const db = {
     opinions: e.opinions.map((o) => ({ id: randomUUID(), deleted: null, data: strip(o) }))
   })),
   activity: [],
-  notes: []
+  notes: [],
+  reviews: [],
+  role: 'editor'
 };
 function strip(o) { const c = { ...o }; delete c._id; delete c._updated; return c; }
 const calls = [];
@@ -42,7 +44,12 @@ function handle(name, p) {
         })),
         trash: db.projects.filter((x) => x.deleted).map((x) => ({ _id: x.id, name: x.data['שם היזם'], address: x.data['כתובת הפרויקט'], deleted_at: x.deleted })),
         activity: db.activity.slice(0, 30),
-        notes: db.notes.filter((n) => !n.deleted).map((n) => ({ ...n }))
+        notes: db.notes.filter((n) => !n.deleted).map((n) => ({ ...n })),
+        me: { role: db.role },
+        reviews: db.reviews.filter((r) => !r.superseded_by).map((r) => ({
+          _id: r._id, project_id: r.project_id, opinion_id: r.opinion_id, round: r.round, status: r.status, updated_at: r.updated_at,
+          ok: Object.values(r.marks).filter((m) => m.verdict === 'ok').length, no: Object.values(r.marks).filter((m) => m.verdict === 'no').length
+        }))
       }
     };
     case 'hb_upsert_project': {
@@ -69,6 +76,50 @@ function handle(name, p) {
       p.p_projects.forEach((e) => db.projects.push({ id: randomUUID(), deleted: null, data: strip(e.project), opinions: e.opinions.map((o) => ({ id: randomUUID(), deleted: null, data: strip(o) })) }));
       log('import', p.p_projects.length + ' פרויקטים'); return { body: p.p_projects.length };
     }
+    default: return reviewRpc(name, p);
+  }
+}
+
+// Review RPCs: same status rules as the SQL functions.
+function reviewRpc(name, p) {
+  const isWrite = name !== 'hb_review_get' && name !== 'hb_review_file';
+  if (name.startsWith('hb_review_') && isWrite && db.role === 'viewer') return { status: 400, body: { code: 'P0001', message: 'hb_readonly' } };
+  const rv = db.reviews.find((r) => r._id === p.p_review);
+  const ev = (r, kind, detail) => { r.events.unshift({ at: new Date().toISOString(), actor: p.p_actor || '', kind, detail }); r.updated_at = new Date().toISOString(); };
+  switch (name) {
+    case 'hb_review_open': {
+      const cur = db.reviews.find((r) => r.project_id === p.p_project && r.opinion_id === p.p_opinion && !r.superseded_by);
+      if (cur) return { body: cur._id };
+      const r = { _id: randomUUID(), project_id: p.p_project, opinion_id: p.p_opinion, round: 1, status: 'waiting_for_reports', levy_rate: 25, params: {}, marks: {}, events: [], files: [], superseded_by: null, updated_at: new Date().toISOString() };
+      db.reviews.push(r); ev(r, 'open', {}); return { body: r._id };
+    }
+    case 'hb_review_get': {
+      if (!rv) return { status: 400, body: { message: 'hb_not_found' } };
+      return { body: { ...rv, files: rv.files.filter((f) => !f.deleted).map(({ content_b64, ...f }) => f), rounds: db.reviews.filter((x) => x.project_id === rv.project_id && x.opinion_id === rv.opinion_id).map((x) => ({ _id: x._id, round: x.round, status: x.status })) } };
+    }
+    case 'hb_review_file': { const f = db.reviews.flatMap((r) => r.files).find((x) => x._id === p.p_file); return { body: { file_name: f.file_name, content_b64: f.content_b64 } }; }
+    case 'hb_review_import': {
+      for (let i = 1; i <= 22; i++) {
+        const c = 'r' + i; const v = p.p_parsed[c] || {};
+        rv.params[c] = { ...(rv.params[c] || {}), ...(p.p_slot === 'N' ? { N: v.v, ...(v.note ? { src: v.note } : {}) } : { [p.p_slot]: v.v, [p.p_slot + 'note']: v.note || '' }) };
+      }
+      rv.files.forEach((f) => { if (f.slot === p.p_slot) f.deleted = true; });
+      if (p.p_file) rv.files.push({ _id: randomUUID(), slot: p.p_slot, file_name: p.p_file.name, size: p.p_file.size, meta: p.p_file.meta, content_b64: p.p_file.content_b64 });
+      const other = p.p_slot === 'D' ? 'M' : 'D';
+      if (p.p_slot !== 'N' && rv.status === 'waiting_for_reports' && rv.files.some((f) => !f.deleted && f.slot === other)) rv.status = 'reports_imported';
+      ev(rv, 'import', { slot: p.p_slot, file: p.p_file?.name }); return { body: rv.status };
+    }
+    case 'hb_review_set_ref': rv.params[p.p_row] = { ...(rv.params[p.p_row] || {}), N: p.p_value, src: p.p_src }; ev(rv, 'ref', { row: p.p_row, N: p.p_value }); return { body: null };
+    case 'hb_review_mark':
+      rv.marks[p.p_row] = { verdict: p.p_verdict, comment: p.p_comment, reviewer: p.p_actor, marked_at: new Date().toISOString() };
+      if (['waiting_for_reports', 'reports_imported', 'revised_report_received'].includes(rv.status)) rv.status = 'in_review';
+      ev(rv, 'mark', { row: p.p_row, verdict: p.p_verdict, comment: p.p_comment }); return { body: rv.status };
+    case 'hb_review_status':
+      if (p.p_status === 'letter_draft') { ev(rv, 'letter_draft', p.p_note); return { body: rv.status }; }
+      rv.status = 'instructions_sent'; ev(rv, 'letter_sent', p.p_note); return { body: rv.status };
+    case 'hb_review_approve':
+      if (Object.values(rv.marks).filter((m) => m.verdict === 'ok').length < 22) return { status: 400, body: { message: 'hb_not_all_ok' } };
+      rv.status = 'approved'; ev(rv, 'approve', {}); return { body: null };
     default: return { status: 404, body: { message: 'unknown rpc' } };
   }
 }
@@ -464,6 +515,80 @@ try {
   ok(readFileSync(lp, 'utf8').includes('start "" chrome "http://localhost:4173/?k=HB-TEST-TEST-TEST"'), 'Windows launcher opens the app in Chrome');
   await edgeCtx.close();
 
+  // ===== Appraisal review module =====
+  console.log('Review: list column, button, tab');
+  await page.goto(`${BASE}/?k=${KEY}#/`);
+  await page.waitForSelector('.table-projects .row');
+  ok(await page.isVisible('.th-btn:has-text("בקרת שומה")'), 'review status column in the project list');
+  const withOps = page.locator('.table-projects .row').filter({ has: page.locator('td[data-label="חוו״ד"]:not(:text-is("0"))') }).first();
+  const projName = (await withOps.locator('.project-name').textContent()).trim();
+  await withOps.locator('a:has-text("בקרת שומת השבחה")').click();
+  await page.waitForSelector('.detail-tabs a.on:has-text("שומות השבחה")');
+  ok(/#\/p\/[^/]+\/r$/.test(page.url()), 'list button opens the review tab of that project');
+  ok((await page.textContent('.project-title')).trim() === projName, 'same project page, new tab');
+  await page.screenshot({ path: `${SHOTS}/r1-review-tab.png`, fullPage: true });
+  await page.click('.detail-tabs a:has-text("פרויקט ומעקב")');
+  await page.waitForSelector('.panel-follow');
+  ok(await page.isVisible('h2:has-text("חוות דעת")'), 'project tab still shows the original card');
+  await page.click('.detail-tabs a:has-text("שומות השבחה")');
+  await page.waitForSelector('.review-card');
+
+  console.log('Review: open, import, mark, letter');
+  await page.locator('.review-card button:has-text("פתיחת בקרה")').first().click();
+  await page.waitForSelector('.table-review');
+  const openCall = lastCall('hb_review_open').params;
+  ok(openCall.p_project && openCall.p_opinion && openCall.p_key === KEY, 'open sends project + opinion');
+  ok((await page.locator('.table-review tr.row').count()) === 22, '22 parameter rows');
+  ok((await page.locator('.table-review .group-row').count()) === 7, '7 chapter rows');
+  await page.fill('input[aria-label="שם הבודק"]', 'ענת');
+  for (const [i, f] of [[0, 'sample-developer'], [1, 'sample-municipality'], [2, 'sample-reference']]) {
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('.review-slot .mail-card').nth(i).click();
+    await (await chooser).setFiles(`docs/hashbacha/templates/${f}.xlsx`);
+    await page.waitForSelector('.import-msg');
+    await page.waitForTimeout(300);
+    await page.click('.import-msg button:has-text("סגירה")');
+  }
+  const imp = calls.filter((c) => c.name === 'hb_review_import').map((c) => c.params);
+  ok(imp.map((c) => c.p_slot).join() === 'D,M,N', 'imports go to slots D, M, N');
+  ok(typeof imp[0].p_parsed.r5.v === 'number' && imp[0].p_file.content_b64.length > 100 && imp[0].p_actor === 'ענת', 'import payload: parsed values, file, reviewer name');
+  ok(await page.isVisible('.detail-badges .pill:has-text("הדוחות נקלטו")'), 'status: reports imported');
+  ok((await page.locator('.table-review .side-good').count()) > 0 && (await page.locator('.table-review .side-bad').count()) > 0, 'rows coloured green / red');
+  const r1 = page.locator('tr[data-row="r1"]');
+  await r1.locator('button.mark-ok').click();
+  await page.waitForSelector('tr[data-row="r1"] button.mark-ok.on');
+  ok(lastCall('hb_review_mark').params.p_row === 'r1' && lastCall('hb_review_mark').params.p_verdict === 'ok', '✓ sends row + verdict');
+  const r5 = page.locator('tr[data-row="r5"]');
+  await r5.locator('textarea').fill('נדרש מקור לעסקאות');
+  await r5.locator('button.mark-no').click();
+  await page.waitForSelector('tr[data-row="r5"] button.mark-no.on');
+  ok(lastCall('hb_review_mark').params.p_comment === 'נדרש מקור לעסקאות', '✗ sends the comment');
+  ok(await page.isVisible('.detail-badges .pill:has-text("בבדיקה")'), 'status: in review after first mark');
+  await page.click('button:has-text("עריכת ערכי ייחוס")');
+  await page.fill('input[aria-label="מקור רווח יזמי"]', 'נוהג שוק 2026');
+  await page.click('.editbar button:has-text("שמור ערכי ייחוס")');
+  await page.waitForSelector('.editbar', { state: 'detached' });
+  ok(lastCall('hb_review_set_ref').params.p_row === 'r18' && lastCall('hb_review_set_ref').params.p_src === 'נוהג שוק 2026', 'reference edit saves row + source');
+  ok(await page.isDisabled('button:has-text("אישור הבקרה")'), 'approve disabled until all 22 rows are ✓');
+  await page.screenshot({ path: `${SHOTS}/r2-review-compare.png`, fullPage: true });
+  await page.click('button:has-text("מכתב הוראות (1)")');
+  await page.waitForSelector('.mail-form');
+  const letter = await page.inputValue('textarea[aria-label="תוכן המייל"]');
+  ok(letter.includes('שווי דירה קיימת') && letter.includes('נדרש מקור לעסקאות'), 'letter lists the ✗ row with the comment');
+  await page.screenshot({ path: `${SHOTS}/r3-letter.png` });
+  await page.evaluate(() => { document.querySelectorAll('.modal a[target=_blank]').forEach((a) => a.removeAttribute('href')); });
+  await page.click('.modal a:has-text("Gmail")');
+  await page.waitForSelector('button:has-text("סימון: המכתב נשלח")');
+  ok(lastCall('hb_review_status').params.p_status === 'letter_draft', 'opening the letter logs a draft');
+  ok(lastCall('hb_upsert_note').params.p_data.kind === 'mail_out', 'letter filed to the project as mail out');
+  await page.click('button:has-text("סימון: המכתב נשלח")');
+  await page.waitForSelector('.detail-badges .pill:has-text("הוראות נשלחו")');
+  ok(lastCall('hb_review_status').params.p_status === 'instructions_sent', 'mark sent → instructions_sent');
+  ok(await page.isVisible('.file-timeline >> text=מכתב הוראות סומן כנשלח'), 'review log shows the letter');
+  await page.goto(`${BASE}/#/`);
+  await page.waitForSelector('.table-projects .row');
+  ok(await page.isVisible('.table-projects .pill:has-text("הוראות נשלחו")'), 'list badge shows the review status');
+
   // ===== Mobile =====
   console.log('\nMobile 390');
   const m = await newPage({ width: 390, height: 844 });
@@ -479,6 +604,24 @@ try {
   await m.page.waitForSelector('.page-detail');
   await m.page.waitForTimeout(900);
   await noHorizontalScroll(m.page, 'project card');
+  const rid = db.reviews[0]._id; const rpid = db.reviews[0].project_id;
+  await m.page.goto(`${BASE}/#/p/${rpid}/r/${rid}`);
+  await m.page.waitForSelector('.table-review');
+  await m.page.waitForTimeout(900);
+  await noHorizontalScroll(m.page, 'review comparison');
+  await m.page.screenshot({ path: `${SHOTS}/m-review.png`, fullPage: true });
+  await m.page.goto(`${BASE}/#/p/${rpid}/r`);
+  await m.page.waitForSelector('.review-card');
+  await noHorizontalScroll(m.page, 'review tab');
+  db.role = 'viewer';
+  await m.page.goto(`${BASE}/#/p/${rpid}/r/${rid}`);
+  await m.page.reload();
+  await m.page.waitForSelector('.table-review');
+  ok(await m.page.locator('.table-review button.mark-ok').first().isDisabled(), 'viewer code: marking disabled');
+  db.role = 'editor';
+  await m.page.goto(`${BASE}/#/p/${rpid}`);
+  await m.page.reload();
+  await m.page.waitForSelector('.page-detail');
   await m.page.screenshot({ path: `${SHOTS}/m2-detail.png`, fullPage: true });
   await m.page.click('.mail-card:has-text("השלמת פרטים")');
   await m.page.waitForSelector('.mail-form');
@@ -499,7 +642,7 @@ try {
   ok(await m.page.evaluate(() => !localStorage.getItem('hashbacha-access-key')), 'logout clears the code');
 } catch (e) {
   failures++;
-  console.log('  ✗ crashed: ' + e.message.split('\n')[0]);
+  console.log('  ✗ crashed: ' + e.message.split('\n').slice(0, 4).join(' | '));
 } finally {
   await browser.close();
   server.kill();
