@@ -10,6 +10,7 @@ import Analytics from './components/Analytics.jsx';
 import ActivityView from './components/ActivityView.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
+import MailComposer from './components/MailComposer.jsx';
 
 // An entry link (?k=CODE) signs in with one click; the code is then removed from the address bar.
 function readKey() {
@@ -42,7 +43,7 @@ export function go(path) {
 const NAV = [
   { path: '#/', view: 'projects', label: 'פרויקטים' },
   { path: '#/a', view: 'analytics', label: 'ניתוח' },
-  { path: '#/log', view: 'activity', label: 'יומן וסל' }
+  { path: '#/log', view: 'activity', label: 'יומן' }
 ];
 
 export default function App() {
@@ -54,6 +55,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [mailRequest, setMailRequest] = useState(null);
   const toastId = useRef(0);
 
   const toast = useCallback((text, tone = 'info', action = null) => {
@@ -112,8 +114,9 @@ export default function App() {
     }
   }, [key, load, toast, logout]);
 
-  const ctx = useMemo(() => ({ data, mutate, toast, confirm, busy, reload: () => load(key, true) }),
-    [data, mutate, toast, confirm, busy, load, key]);
+  const ctx = useMemo(() => ({
+    data, mutate, toast, confirm, busy, reload: () => load(key, true), openMail: setMailRequest
+  }), [data, mutate, toast, confirm, busy, load, key]);
 
   if (!key) {
     return (
@@ -205,6 +208,7 @@ export default function App() {
         ctx={ctx}
         onLogout={() => { setSettingsOpen(false); logout(); }}
       />
+      <MailComposer request={mailRequest} onClose={() => setMailRequest(null)} ctx={ctx} />
       <ConfirmDialog state={confirmState} onDone={(v) => { confirmState?.resolve(v); setConfirmState(null); }} />
       <Toasts items={toasts} />
     </div>
