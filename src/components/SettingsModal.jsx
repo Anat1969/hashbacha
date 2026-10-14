@@ -72,6 +72,15 @@ export default function SettingsModal({ open, onClose, ctx, onLogout }) {
       </section>
 
       <section className="settings-block">
+        <h3 className="settings-title">פרויקט המחקר ב־Claude</h3>
+        <p className="hint">הקישור לפרויקט ב־Claude שבו נעשו המחקר והכללים של בקרת השומות. בלשונית "שומות השבחה" יופיע כפתור שפותח אותו.</p>
+        <Field label="קישור לפרויקט ב־Claude">
+          <input className="input" dir="ltr" type="url" value={form.researchUrl || ''} placeholder="https://claude.ai/project/..."
+            onChange={(e) => setForm({ ...form, researchUrl: e.target.value })} />
+        </Field>
+      </section>
+
+      <section className="settings-block">
         <h3 className="settings-title">אנשי קשר: שמאים ויזמים</h3>
         <p className="hint">
           משמש למיילי תזכורת ולמיילים להשלמת פרטים. המערכת מזהה את השמאי או היזם לפי השם שמופיע בחוות הדעת, וממלאת את הכתובת שלו.

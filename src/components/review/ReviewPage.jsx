@@ -8,7 +8,7 @@ import { reviewLetterRequest } from '../../lib/mailRequests.js';
 import { formatStamp } from '../Notes.jsx';
 import { ease } from '../ui.jsx';
 import { ReviewPill } from './ReviewPill.jsx';
-import { readAuthor } from './ReviewTab.jsx';
+import { readAuthor, ResearchLink } from './ReviewTab.jsx';
 
 const MAX_FILE = 2 * 1024 * 1024;
 const CLS_PILL = { good: 'pill-green', bad: 'pill-red', none: 'pill-none' };
@@ -38,6 +38,7 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
   const [review, setReview] = useState(null);
   const [error, setError] = useState(false);
   const [refEdit, setRefEdit] = useState(false);
+  const [dragSlot, setDragSlot] = useState(null);
   const [refDraft, setRefDraft] = useState({});
   const [importMsg, setImportMsg] = useState(null);
   const [author, setAuthor] = useState(readAuthor);
@@ -87,8 +88,16 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
 
   async function onFile(e) {
     const file = e.target.files?.[0]; e.target.value = '';
-    if (!file) return;
-    const slot = slotRef.current;
+    if (file) await importFile(file, slotRef.current);
+  }
+
+  function onDrop(e, slot) {
+    e.preventDefault(); setDragSlot(null);
+    const file = e.dataTransfer?.files?.[0];
+    if (file && canWrite) importFile(file, slot);
+  }
+
+  async function importFile(file, slot) {
     try {
       if (file.size > MAX_FILE) throw new Error('הקובץ גדול מ־2MB. יש להשתמש בתבנית האחידה בלבד.');
       const XLSX = await import('xlsx');
@@ -100,7 +109,7 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
         if (!go) return;
       }
       const { parsed, warn, filled } = prepareImport(rep, slot, p['שם התכנית']);
-      const meta = { appraiser: rep.meta['שם השמאי'] || '', date: rep.meta['תאריך השומה'] || '', project: rep.meta['שם הפרויקט'] || '' };
+      const meta = { appraiser: rep.meta['שם השמאי'] || '', date: rep.meta['תאריך השומה'] || '', project: rep.meta['שם הפרויקט'] || '', location: rep.meta['מיקום'] || '', plan: rep.meta['תכנית משביחה'] || '' };
       const res = await act((k) => api.reviewImport(k, review._id, slot, { name: file.name, size: file.size, sha256: sha, content_b64: b64, meta }, parsed, who()), `${SLOTS[slot]}: הדוח נקלט`);
       if (res !== null) setImportMsg({ ok: true, title: `${SLOTS[slot]} נקלט מהקובץ ${file.name}: ${filled} מתוך 22 שדות הוזנו.`, warn });
     } catch (err) {
@@ -123,21 +132,37 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
     await act((k) => api.reviewMark(k, review._id, r.id, v, comment ?? cur.comment ?? '', who()));
   }
 
+  // "עריכת נתונים": reference value and source, and manual correction of the two reports.
+  const EDIT_KEYS = ['D', 'N', 'src', 'M'];
   function startRef() {
-    setRefDraft(Object.fromEntries(PARAMS.map((r) => [r.id, { N: params[r.id]?.N ?? '', src: params[r.id]?.src ?? '' }])));
+    setRefDraft(Object.fromEntries(PARAMS.map((r) => [r.id, Object.fromEntries(EDIT_KEYS.map((k) => [k, params[r.id]?.[k] ?? '']))])));
     setRefEdit(true);
   }
-  const refChanged = refEdit ? PARAMS.filter((r) => String(refDraft[r.id]?.N ?? '') !== String(params[r.id]?.N ?? '') || (refDraft[r.id]?.src ?? '') !== (params[r.id]?.src ?? '')) : [];
+  const changedKeys = (r) => (refEdit ? EDIT_KEYS.filter((k) => String(refDraft[r.id]?.[k] ?? '') !== String(params[r.id]?.[k] ?? '')) : []);
+  const refChanged = refEdit ? PARAMS.filter((r) => changedKeys(r).length) : [];
+  const cast = (r, raw) => { const t = String(raw).trim(); return r.type !== 'match' && t !== '' && Number.isFinite(num(t)) ? num(t) : t; };
   async function saveRef() {
     const a = who();
     const res = await act(async (k) => {
       for (const r of refChanged) {
-        const raw = String(refDraft[r.id].N).trim();
-        const value = r.type !== 'match' && raw !== '' && Number.isFinite(num(raw)) ? num(raw) : raw;
-        await api.reviewSetRef(k, review._id, r.id, value, refDraft[r.id].src, a);
+        const ch = changedKeys(r); const d = refDraft[r.id];
+        if (ch.includes('N') || ch.includes('src')) await api.reviewSetRef(k, review._id, r.id, cast(r, d.N), d.src, a);
+        for (const slot of ['D', 'M']) if (ch.includes(slot)) await api.reviewSetValue(k, review._id, r.id, slot, cast(r, d[slot]), params[r.id]?.[slot + 'note'] || '', a);
       }
-    }, `${refChanged.length} ערכי ייחוס נשמרו`);
+    }, `${refChanged.length} שורות עודכנו`);
     if (res !== null) setRefEdit(false);
+  }
+  const setCell = (r, k, v) => setRefDraft({ ...refDraft, [r.id]: { ...refDraft[r.id], [k]: v } });
+
+  // After approval: offer to copy r18 (developer profit) of both reports into the linked opinion.
+  async function updateOpinion() {
+    const dev = params.r18?.D; const city = params.r18?.M;
+    const ok = await ctx.confirm(`לעדכן בחוות הדעת: רווחיות יזם ${dev ?? '—'}%, רווחיות עירייה ${city ?? '—'}%? הערכים לקוחים מ"רווח יזמי" (r18) בשתי השומות.`, 'עדכון חוות הדעת');
+    if (!ok || !opinion) return;
+    await ctx.mutate((k) => api.saveOpinion(k, p._id, opinion._id, {
+      ...opinion, 'רווחיות יזם (%)': dev === '' || dev == null ? opinion['רווחיות יזם (%)'] || '' : `${dev}%`,
+      'רווחיות עירייה (%)': city === '' || city == null ? opinion['רווחיות עירייה (%)'] || '' : `${city}%`
+    }), 'חוות הדעת עודכנה מהבקרה');
   }
 
   function openLetter() {
@@ -201,6 +226,7 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
                 ))}
               </div>
             )}
+            <ResearchLink ctx={ctx} />
             <label className="inline-field">
               <span className="label">שם הבודק</span>
               <input className="input input-author" value={author} placeholder="שם" aria-label="שם הבודק" onChange={(e) => setAuthor(e.target.value)} />
@@ -213,11 +239,13 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
           {['D', 'M', 'N'].map((slot) => {
             const f = files[slot];
             return (
-              <div key={slot} className="review-slot">
+              <div key={slot} className={`review-slot${dragSlot === slot ? ' is-drag' : ''}`}
+                onDragOver={(e) => { if (canWrite) { e.preventDefault(); setDragSlot(slot); } }}
+                onDragLeave={() => setDragSlot(null)} onDrop={(e) => onDrop(e, slot)}>
                 <button className="mail-card" onClick={() => pickFile(slot)} disabled={!canWrite}>
                   <b>{SLOTS[slot]}{slot === 'N' ? ' (לא חובה)' : ''}</b>
                   {f ? <span>{f.file_name}{f.meta?.appraiser ? ` · ${f.meta.appraiser}` : ''}{f.meta?.date ? ` · ${f.meta.date}` : ''}</span>
-                    : <span>{slot === 'N' ? 'קובץ ייחוס בתבנית, או הזנה ידנית בטבלה' : 'לא נקלט דוח. לחיצה להעלאת xlsx בתבנית האחידה'}</span>}
+                    : <span>{slot === 'N' ? 'קובץ ייחוס בתבנית, או הזנה ידנית בטבלה' : 'לא נקלט דוח. לחיצה או גרירת קובץ xlsx בתבנית האחידה'}</span>}
                   {f && canWrite && <span className="label">לחיצה להחלפת הקובץ</span>}
                 </button>
                 {f && <button className="link-btn" onClick={() => download(f)}>הורדת הקובץ</button>}
@@ -226,6 +254,19 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
           })}
           <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={onFile} aria-label="קובץ דוח" />
         </div>
+        <p className="hint">
+          התבנית האחידה: גיליון ראשון, שורות "סוג דוח" (יזם / עירייה / ייחוס), שם הפרויקט, מיקום, תכנית משביחה, שם השמאי ותאריך השומה,
+          ואחריהן טבלה שמתחילה ב"קוד" עם 22 השורות r1–r22. <a className="link-btn" href="/templates/template.xlsx" download="תבנית-דוח-שמאי.xlsx">הורדת תבנית ריקה לשמאים</a>
+        </p>
+        <dl className="facts review-facts">
+          {[
+            ['שמאי היזם', files.D?.meta?.appraiser || opinion?.['שמאי מטעם היזם']],
+            ['שמאי העירייה', files.M?.meta?.appraiser || opinion?.['שמאי מטעם העירייה']],
+            ['תאריכי השומות', [files.D?.meta?.date && `יזם ${files.D.meta.date}`, files.M?.meta?.date && `עירייה ${files.M.meta.date}`].filter(Boolean).join(' · ')],
+            ['תכנית משביחה', files.D?.meta?.plan || files.M?.meta?.plan || p["מס' תכנית/ מס זמני"]],
+            ['מיקום', files.D?.meta?.location || files.M?.meta?.location || p['כתובת הפרויקט']]
+          ].map(([k, v]) => <div className="fact" key={k}><dt className="label">{k}</dt><dd className="fact-value">{v || '—'}</dd></div>)}
+        </dl>
 
         <AnimatePresence>
           {importMsg && (
@@ -269,11 +310,12 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
             <h2 className="display-s">טבלת ההשוואה</h2>
           </div>
           <div className="panel-actions">
-            {canWrite && !refEdit && <button className="btn btn-ghost" onClick={startRef}>עריכת ערכי ייחוס</button>}
+            {canWrite && !refEdit && <button className="btn btn-ghost" onClick={startRef}>עריכת נתונים</button>}
             <button className="btn btn-ghost" onClick={openLetter} disabled={!rejected.length || !canWrite}>מכתב הוראות ({rejected.length})</button>
             {letterOpened && canWrite && <button className="btn btn-primary" onClick={markSent}>סימון: המכתב נשלח</button>}
             {review.status === 'instructions_sent' && canWrite && <button className="btn btn-ghost" onClick={newRound}>סבב חדש לדוח מתוקן</button>}
-            <button className="btn btn-primary" onClick={approve} disabled={!canWrite || sum.ok !== 22}>אישור הבקרה</button>
+            {approved && opinion && ctx.role === 'editor' && <button className="btn btn-ghost" onClick={updateOpinion}>עדכון רווחיות בחוות הדעת</button>}
+            {!approved && <button className="btn btn-primary" onClick={approve} disabled={!canWrite || sum.ok !== 22}>אישור הבקרה</button>}
           </div>
         </div>
         <div className="table-wrap">
@@ -296,18 +338,22 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
                     {head && <tr className="group-row"><td colSpan={6}><span className="group-label">{CHAPTERS[r.ch]}</span></td></tr>}
                     <tr className={`row${refEdit ? ' row-edit' : ''}`} data-row={r.id}>
                       <td data-label="פרמטר"><span className="project-name">{r.label}</span><span className="project-sub">{r.unit} · <span className="mono">{r.id}</span></span></td>
-                      <td data-label="שמאי היזם"><SideCell v={row.D} note={row.Dnote} s={c.D} /></td>
+                      <td data-label="שמאי היזם">{refEdit
+                        ? <input className="input input-cell" dir="ltr" aria-label={`יזם ${r.label}`} value={refDraft[r.id]?.D ?? ''} onChange={(e) => setCell(r, 'D', e.target.value)} />
+                        : <SideCell v={row.D} note={row.Dnote} s={c.D} />}</td>
                       <td data-label="ייחוס ומקור">
                         {refEdit ? (
                           <div className="ref-edit">
-                            <input className="input input-cell" dir="ltr" aria-label={`ייחוס ${r.label}`} value={refDraft[r.id]?.N ?? ''} onChange={(e) => setRefDraft({ ...refDraft, [r.id]: { ...refDraft[r.id], N: e.target.value } })} />
-                            <input className="input input-cell" aria-label={`מקור ${r.label}`} placeholder="מקור" value={refDraft[r.id]?.src ?? ''} onChange={(e) => setRefDraft({ ...refDraft, [r.id]: { ...refDraft[r.id], src: e.target.value } })} />
+                            <input className="input input-cell" dir="ltr" aria-label={`ייחוס ${r.label}`} value={refDraft[r.id]?.N ?? ''} onChange={(e) => setCell(r, 'N', e.target.value)} />
+                            <input className="input input-cell" aria-label={`מקור ${r.label}`} placeholder="מקור" value={refDraft[r.id]?.src ?? ''} onChange={(e) => setCell(r, 'src', e.target.value)} />
                           </div>
                         ) : (
                           <div className="ref-cell"><b className="mono">{row.N === '' || row.N == null ? '—' : fmt(row.N)}</b><span className="hint">{row.src || 'ללא מקור'}</span></div>
                         )}
                       </td>
-                      <td data-label="שמאי העירייה"><SideCell v={row.M} note={row.Mnote} s={c.M} /></td>
+                      <td data-label="שמאי העירייה">{refEdit
+                        ? <input className="input input-cell" dir="ltr" aria-label={`עירייה ${r.label}`} value={refDraft[r.id]?.M ?? ''} onChange={(e) => setCell(r, 'M', e.target.value)} />
+                        : <SideCell v={row.M} note={row.Mnote} s={c.M} />}</td>
                       <td data-label="טווח קביל" className="mono tol-cell">{tolText(r, row.N)}</td>
                       <td data-label="בקרה"><MarkCell m={m} canWrite={canWrite} onMark={(v, comment) => mark(r, v, comment)} label={r.label} /></td>
                     </tr>
@@ -337,8 +383,8 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
       <AnimatePresence>
         {refEdit && (
           <motion.div className="editbar" initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} transition={{ duration: 0.4, ease }} role="region" aria-label="סרגל עריכה">
-            <span className="editbar-state"><span className={`sync-dot${refChanged.length ? ' on' : ''}`} />{refChanged.length ? `${refChanged.length} ערכי ייחוס שונו` : 'עריכת ייחוס · אין שינויים'}</span>
-            <button className="btn btn-primary" onClick={saveRef} disabled={!refChanged.length}>שמור ערכי ייחוס</button>
+            <span className="editbar-state"><span className={`sync-dot${refChanged.length ? ' on' : ''}`} />{refChanged.length ? `${refChanged.length} שורות שונו` : 'עריכת נתונים · אין שינויים'}</span>
+            <button className="btn btn-primary" onClick={saveRef} disabled={!refChanged.length}>שמור נתונים</button>
             <button className="btn btn-ghost btn-on-dark" onClick={() => setRefEdit(false)}>ביטול</button>
           </motion.div>
         )}

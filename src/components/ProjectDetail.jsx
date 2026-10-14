@@ -260,7 +260,7 @@ export default function ProjectDetail({ ctx, entry, tab, reviewId }) {
             <button key={v} role="tab" aria-selected={fileTab === v} className={fileTab === v ? 'on' : ''} onClick={() => setFileTab(v)}>{l}</button>
           ))}
         </div>
-        {fileTab === 'timeline' && <FileTimeline entry={entry} notes={notes} />}
+        {fileTab === 'timeline' && <FileTimeline entry={entry} notes={notes} reviews={reviews} />}
         {fileTab === 'notes' && <NoteList ctx={ctx} notes={notes.filter((n) => !isMail(n))} empty="אין עדיין הערות לתיק. הערות מהיומן שתויקו לפרויקט יופיעו כאן." />}
         {fileTab === 'mail' && <NoteList ctx={ctx} notes={notes.filter(isMail).sort((a, b) => noteDate(b) - noteDate(a))} empty="אין עדיין מיילים בתיק." />}
         <MailLog open={mailLogOpen} onClose={() => setMailLogOpen(false)} ctx={ctx} projectId={p._id} />
@@ -407,12 +407,25 @@ const FT_LEGEND = [
   ['opnote', 'הערה מתוך חוות דעת'],
   ['note', 'הערה או משימה בתיק'],
   ['mail_out', 'מייל שיצא מאיתנו'],
-  ['mail_in', 'מייל שהתקבל אצלנו']
+  ['mail_in', 'מייל שהתקבל אצלנו'],
+  ['review', 'בקרת שומה']
 ];
+const REVIEW_EVENT = {
+  open: () => 'נפתחה בקרת שומה',
+  import: (d) => `נקלט דוח ${({ D: 'שמאי היזם', M: 'שמאי העירייה', N: 'ייחוס' })[d.slot] || ''}${d.file ? ` · ${d.file}` : ''}`,
+  status: (d) => `סטטוס הבקרה: ${({ reports_imported: 'הדוחות נקלטו', in_review: 'בבדיקה', revised_report_received: 'התקבל דוח מתוקן' })[d.to] || d.to}`,
+  letter_sent: (d) => `נשלח מכתב הוראות${d.rows ? ` על ${d.rows} שורות` : ''}`,
+  round_open: (d) => `נפתח סבב ${d.round}`,
+  approve: () => 'הבקרה אושרה'
+};
 
-function FileTimeline({ entry, notes }) {
+function FileTimeline({ entry, notes, reviews = [] }) {
   const [only, setOnly] = useState('');
   const items = [];
+  reviews.forEach((r) => {
+    const n = entry.opinions.findIndex((o) => o._id === r.opinion_id) + 1;
+    (r.events || []).forEach((ev) => items.push({ d: new Date(ev.at), kind: 'review', who: `בקרת שומה${n ? ` · חוו״ד ${n}` : ''}${ev.actor ? ` · ${ev.actor}` : ''}`, text: (REVIEW_EVENT[ev.kind] || (() => ev.kind))(ev.detail || {}) }));
+  });
   entry.opinions.forEach((o, i) => {
     const req = parseDate(o['תאריך קבלת בקשה']);
     const got = parseDate(o['תאריך קבלת חוו"ד']);
