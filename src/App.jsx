@@ -8,6 +8,7 @@ import ProjectsView from './components/ProjectsView.jsx';
 import ProjectDetail from './components/ProjectDetail.jsx';
 import Analytics from './components/Analytics.jsx';
 import ActivityView from './components/ActivityView.jsx';
+import ReviewsView from './components/review/ReviewsView.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import MailComposer from './components/MailComposer.jsx';
@@ -34,6 +35,7 @@ function parseRoute() {
   if (a === 'p' && b) return { view: 'project', id: decodeURIComponent(b), tab: c === 'r' ? 'review' : null, reviewId: c === 'r' && d ? d : null };
   if (a === 'a') return { view: 'analytics', tab: b || null };
   if (a === 'log') return { view: 'activity' };
+  if (a === 's') return { view: 'reviews' };
   return { view: 'projects' };
 }
 
@@ -43,6 +45,7 @@ export function go(path) {
 
 const NAV = [
   { path: '#/', view: 'projects', label: 'פרויקטים' },
+  { path: '#/s', view: 'reviews', label: 'בקרת שומות' },
   { path: '#/a', view: 'analytics', label: 'ניתוח' },
   { path: '#/log', view: 'activity', label: 'יומן' }
 ];
@@ -201,6 +204,7 @@ export default function App() {
                 : <NotFound />)}
               {route.view === 'analytics' && <Analytics ctx={ctx} tab={route.tab} />}
               {route.view === 'activity' && <ActivityView ctx={ctx} />}
+              {route.view === 'reviews' && <ReviewsView ctx={ctx} />}
             </motion.div>
           </AnimatePresence>
         )}

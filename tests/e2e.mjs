@@ -520,6 +520,13 @@ try {
   await edgeCtx.close();
 
   // ===== Appraisal review module =====
+  console.log('Review: top-level overview');
+  await page.goto(`${BASE}/?k=${KEY}#/s`);
+  await page.waitForSelector('.table-reviews');
+  ok(await page.isVisible('.nav-link.active:has-text("בקרת שומות")'), 'main menu has "בקרת שומות"');
+  ok((await page.locator('.table-reviews tr.row').count()) > 0, 'overview lists opinions with their review status');
+  await page.screenshot({ path: `${SHOTS}/r0-reviews-overview.png`, fullPage: true });
+
   console.log('Review: list column, button, tab');
   await page.goto(`${BASE}/?k=${KEY}#/`);
   await page.waitForSelector('.table-projects .row');
@@ -618,6 +625,13 @@ try {
   await page.goto(`${BASE}/#/`);
   await page.waitForSelector('.table-projects .row');
   ok(await page.isVisible('.table-projects .pill:has-text("אושר")'), 'list badge shows the review status');
+  await page.click('.nav-link:has-text("בקרת שומות")');
+  await page.waitForSelector('.table-reviews');
+  await page.click('.chip-btn:has-text("אושרו")');
+  ok((await page.locator('.table-reviews tr.row').count()) === 1, 'overview filter: the approved review');
+  await page.click('.table-reviews a:has-text("פתיחת ההשוואה")');
+  await page.waitForSelector('.table-review');
+  ok(/#\/p\/[^/]+\/r\/[^/]+$/.test(page.url()), 'overview opens the comparison inside the project card');
 
   // ===== Mobile =====
   console.log('\nMobile 390');
@@ -659,7 +673,7 @@ try {
   await m.page.click('.modal button:has-text("ביטול")');
   await m.page.click('button:has-text("חוות דעת חדשה")');
   await noHorizontalScroll(m.page, 'new opinion form');
-  for (const path of ['#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
+  for (const path of ['#/s', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
     await m.page.goto(`${BASE}/${path}`);
     await m.page.waitForTimeout(900);
     await noHorizontalScroll(m.page, path);
