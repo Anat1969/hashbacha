@@ -2,35 +2,111 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { PROJECT_FIELDS, STATUS_OPTIONS } from '../lib/fields.js';
-import { avgDevProfit, calcGap, overview } from '../lib/calc.js';
+import {
+  followUp, formatDuration, gapColor, matchKeywords, overview, parseDate, parsePercent, profitColor, SIDE
+} from '../lib/calc.js';
 import { exportExcel, parseExcel } from '../lib/excel.js';
-import { Field, Modal, ProfitMeter, StatusPill, ease } from './ui.jsx';
+import { reminderRequest } from '../lib/mailRequests.js';
+import { Field, Modal, StatusPill, ease } from './ui.jsx';
+import { BenchmarkLegend } from './Legend.jsx';
 import { PROFIT_THRESHOLD } from '../lib/config.js';
+
+const latestOpinion = (e) => e.opinions[e.opinions.length - 1] || null;
+const latestWith = (e, key) => {
+  for (let i = e.opinions.length - 1; i >= 0; i--) if (String(e.opinions[i][key] || '').trim()) return e.opinions[i];
+  return null;
+};
+const latestDev = (e) => { const o = latestWith(e, 'רווחיות יזם (%)'); return o ? parsePercent(o['רווחיות יזם (%)']) : null; };
+const latestCity = (e) => { const o = latestWith(e, 'רווחיות עירייה (%)'); return o ? parsePercent(o['רווחיות עירייה (%)']) : null; };
+const projectName = (p) => p['שם התכנית'] || p['כתובת הפרויקט'] || 'ללא שם';
 
 const COLS = [
   { key: 'רובע', label: 'רובע' },
-  { key: 'שם היזם', label: 'שם היזם' },
-  { key: 'כתובת הפרויקט', label: 'כתובת' },
+  { key: 'שם התכנית', label: 'שם הפרויקט' },
+  { key: 'שם היזם', label: 'יזם' },
   { key: "מס' תכנית/ מס זמני", label: 'מס׳ תכנית' },
-  { key: 'שם התכנית', label: 'שם התכנית' },
   { key: 'סטטוס רמזור', label: 'סטטוס' },
+  { key: '__follow', label: 'גורם מעקב' },
   { key: '__count', label: 'חוו״ד' },
-  { key: '__avg', label: 'רווחיות יזם ממוצעת' }
+  { key: '__profit', label: 'רווחיות אחרונה' }
 ];
-const INLINE_KEYS = ['רובע', 'שם היזם', 'כתובת הפרויקט', "מס' תכנית/ מס זמני", 'שם התכנית', 'סטטוס רמזור'];
+const INLINE_KEYS = ['רובע', 'שם התכנית', 'שם היזם', "מס' תכנית/ מס זמני", 'סטטוס רמזור'];
 
 function profitBand(v) {
   if (v === null) return 'ללא נתוני רווחיות';
-  if (v < 10) return 'עד 10%';
-  if (v < 15) return '10%–15%';
-  if (v < 20) return '15%–20%';
-  return '20% ומעלה';
+  if (v <= PROFIT_THRESHOLD - 5) return `עד ${PROFIT_THRESHOLD - 5}%`;
+  if (v <= PROFIT_THRESHOLD) return `${PROFIT_THRESHOLD - 5}%–${PROFIT_THRESHOLD}% (עד הבנצ'מרק)`;
+  if (v <= PROFIT_THRESHOLD + 5) return `${PROFIT_THRESHOLD}%–${PROFIT_THRESHOLD + 5}% (מעל הבנצ'מרק)`;
+  return `מעל ${PROFIT_THRESHOLD + 5}%`;
+}
+
+const GROUPS = [
+  { value: '', label: 'ללא קיבוץ' },
+  { value: 'רובע', label: 'רובע', fn: (r) => r.p['רובע'] },
+  { value: 'שם היזם', label: 'יזם', fn: (r) => r.p['שם היזם'] },
+  { value: 'שם התכנית', label: 'שם הפרויקט', fn: (r) => r.p['שם התכנית'] },
+  { value: 'כתובת הפרויקט', label: 'כתובת', fn: (r) => r.p['כתובת הפרויקט'] },
+  { value: "מס' תכנית/ מס זמני", label: 'סוג / מס׳ תכנית', fn: (r) => (/מחוזית/.test(r.p["מס' תכנית/ מס זמני"]) ? 'מחוזית' : /תמ["״]?ל/.test(r.p["מס' תכנית/ מס זמני"]) ? 'ותמ״ל' : r.p["מס' תכנית/ מס זמני"] ? 'מקומית / אחר' : 'ללא מס׳') },
+  { value: 'סטטוס רמזור', label: 'סטטוס', fn: (r) => r.p['סטטוס רמזור'] },
+  { value: '__follow', label: 'גורם מעקב', fn: (r) => (r.follow ? `ממתין ל${r.follow.who}` : 'אין בקשה פתוחה') },
+  { value: '__profit', label: 'רווחיות ביחס לבנצ׳מרק', fn: (r) => profitBand(r.dev) },
+  { value: '__cityAppraiser', label: 'שמאי עירייה', fn: (r) => latestOpinion(r.e)?.['שמאי מטעם העירייה'] },
+  { value: '__devAppraiser', label: 'שמאי יזם', fn: (r) => latestWith(r.e, 'שמאי מטעם היזם')?.['שמאי מטעם היזם'] },
+  { value: '__year', label: 'שנת בקשה אחרונה', fn: (r) => { const d = parseDate(latestOpinion(r.e)?.['תאריך קבלת בקשה']); return d ? String(d.getFullYear()) : null; } },
+  { value: '__count', label: 'מספר חוות דעת', fn: (r) => `${r.e.opinions.length} חוו״ד` }
+];
+
+const CHIPS = [
+  { id: 'city', label: 'ממתין לעירייה', test: (r) => r.follow && SIDE(r.follow.who) === 'city' },
+  { id: 'dev', label: 'ממתין ליזם / שמאי היזם', test: (r) => r.follow && SIDE(r.follow.who) === 'dev' },
+  { id: 'above', label: 'מעל הבנצ׳מרק', test: (r) => r.dev !== null && r.dev > PROFIT_THRESHOLD },
+  { id: 'none', label: 'ללא רווחיות', test: (r) => r.dev === null }
+];
+
+export function SortHeader({ label, col, sort, onSort }) {
+  const active = sort.col === col;
+  return (
+    <th aria-sort={active ? (sort.asc ? 'ascending' : 'descending') : 'none'} className={active ? 'th-sorted' : ''}>
+      <button className={`th-btn${active ? ' sorted' : ''}`} onClick={() => onSort(col)} title="לחיצה ממיינת לפי עמודה זו">
+        <span>{label}</span>
+        <span className="sort-mark" aria-hidden="true">{active ? (sort.asc ? '▲' : '▼') : '⇅'}</span>
+      </button>
+    </th>
+  );
+}
+
+export function ProfitPair({ dev, city, compact }) {
+  const gap = dev !== null && city !== null ? dev - city : null;
+  return (
+    <span className={`pair${compact ? ' pair-compact' : ''}`}>
+      <span className="pair-item"><span className="pair-role">יזם</span><b style={{ color: profitColor(dev) }}>{dev !== null ? dev.toFixed(1) + '%' : '—'}</b></span>
+      <span className="pair-item"><span className="pair-role">עירייה</span><b style={{ color: profitColor(city) }}>{city !== null ? city.toFixed(1) + '%' : '—'}</b></span>
+      {gap !== null && <span className="pair-item"><span className="pair-role">פער</span><b dir="ltr" style={{ color: gapColor(gap) }}>{(gap > 0 ? '+' : '') + gap.toFixed(1)}</b></span>}
+      <span className="pair-track" aria-hidden="true">
+        <span className="pair-mark" />
+        {dev !== null && <motion.span className="pair-fill" style={{ background: profitColor(dev) }} initial={{ width: 0 }} animate={{ width: Math.min(100, (dev / 30) * 100) + '%' }} transition={{ duration: 0.8, ease }} />}
+      </span>
+    </span>
+  );
+}
+
+export function FollowBadge({ follow }) {
+  if (!follow) return <span className="muted">—</span>;
+  return (
+    <span className={`follow follow-${SIDE(follow.who)}`}>
+      <b>{follow.who}</b>
+      {follow.name && <span className="follow-name">{follow.name}</span>}
+      <span className="follow-time mono">{formatDuration(follow.days)}</span>
+    </span>
+  );
 }
 
 export default function ProjectsView({ ctx }) {
   const projects = ctx.data.projects;
+  const notes = ctx.data.notes || [];
   const [query, setQuery] = useState('');
   const [q, setQ] = useState('');
+  const [chips, setChips] = useState([]);
   const [sort, setSort] = useState({ col: null, asc: true });
   const [groupBy, setGroupBy] = useState('');
   const [expanded, setExpanded] = useState(null);
@@ -39,44 +115,48 @@ export default function ProjectsView({ ctx }) {
   const [adding, setAdding] = useState(false);
   const fileRef = useRef(null);
 
-  useEffect(() => { const t = setTimeout(() => setQ(query.trim().toLowerCase()), 200); return () => clearTimeout(t); }, [query]);
+  useEffect(() => { const t = setTimeout(() => setQ(query.trim()), 200); return () => clearTimeout(t); }, [query]);
 
   const stats = useMemo(() => overview(projects), [projects]);
 
+  const allRows = useMemo(() => projects.map((e) => ({
+    e, p: e.project, dev: latestDev(e), city: latestCity(e), follow: followUp(e)
+  })), [projects]);
+
   const rows = useMemo(() => {
-    let list = projects.map((e) => ({ e, avg: avgDevProfit(e) }));
-    if (q) {
-      list = list.filter(({ e }) =>
-        Object.values(e.project).some((v) => String(v).toLowerCase().includes(q)) ||
-        e.opinions.some((o) => Object.values(o).some((v) => String(v).toLowerCase().includes(q))));
-    }
+    let list = allRows;
+    if (q) list = list.filter((r) => matchKeywords(r.e, q, notes.filter((n) => n.project_id === r.p._id)));
+    chips.forEach((id) => { const c = CHIPS.find((x) => x.id === id); list = list.filter(c.test); });
     if (sort.col) {
       const dir = sort.asc ? 1 : -1;
       list = list.slice().sort((a, b) => {
         let va, vb;
         if (sort.col === '__count') { va = a.e.opinions.length; vb = b.e.opinions.length; }
-        else if (sort.col === '__avg') { va = a.avg ?? -999; vb = b.avg ?? -999; }
-        else { va = a.e.project[sort.col] || ''; vb = b.e.project[sort.col] || ''; }
+        else if (sort.col === '__profit') { va = a.dev ?? -999; vb = b.dev ?? -999; }
+        else if (sort.col === '__follow') { va = a.follow ? a.follow.days : -1; vb = b.follow ? b.follow.days : -1; }
+        else { va = a.p[sort.col] || ''; vb = b.p[sort.col] || ''; }
         if (typeof va === 'number') return (va - vb) * dir;
         return String(va).localeCompare(String(vb), 'he') * dir;
       });
     }
     return list;
-  }, [projects, q, sort]);
+  }, [allRows, q, chips, sort, notes]);
 
   const groups = useMemo(() => {
-    if (!groupBy) return [{ label: null, rows }];
+    const g = GROUPS.find((x) => x.value === groupBy);
+    if (!g || !g.fn) return [{ label: null, rows }];
     const map = new Map();
     rows.forEach((r) => {
-      const k = groupBy === '__avg' ? profitBand(r.avg) : (r.e.project[groupBy] || 'ללא');
+      const k = (g.fn(r) || '').toString().trim() || 'ללא';
       if (!map.has(k)) map.set(k, []);
       map.get(k).push(r);
     });
-    return [...map.entries()].map(([label, rs]) => ({ label, rows: rs }));
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'he', { numeric: true }))
+      .map(([label, rs]) => ({ label, rows: rs }));
   }, [rows, groupBy]);
 
   function toggleSort(col) {
-    setSort((s) => (s.col === col ? { col, asc: !s.asc } : { col, asc: true }));
+    setSort((s) => (s.col === col ? (s.asc ? { col, asc: false } : { col: null, asc: true }) : { col, asc: true }));
   }
 
   function startEdit(e) {
@@ -91,7 +171,7 @@ export default function ProjectsView({ ctx }) {
   }
 
   async function remove(e) {
-    const ok = await ctx.confirm(`להעביר את הפרויקט "${e.project['שם היזם'] || ''}" לסל המחזור? אפשר לשחזר אותו בכל עת.`, 'העבר לסל');
+    const ok = await ctx.confirm(`להעביר את "${projectName(e.project)}" לסל המחזור? אפשר לשחזר אותו בכל עת.`, 'העבר לסל');
     if (!ok) return;
     const id = e.project._id;
     const res = await ctx.mutate((k) => api.removeProject(k, id));
@@ -121,6 +201,8 @@ export default function ProjectsView({ ctx }) {
     catch { ctx.toast('הייצוא נכשל', 'error'); }
   }
 
+  const sortedLabel = sort.col ? `${COLS.find((c) => c.key === sort.col)?.label}, ${sort.asc ? 'מהקטן לגדול' : 'מהגדול לקטן'}` : null;
+
   return (
     <div className="page">
       <section className="hero">
@@ -131,7 +213,7 @@ export default function ProjectsView({ ctx }) {
         <Overview stats={stats} />
       </section>
 
-      {stats.open.length > 0 && <Waiting open={stats.open} />}
+      {stats.open.length > 0 && <Waiting open={stats.open} ctx={ctx} />}
 
       <section className="panel">
         <div className="toolbar">
@@ -139,18 +221,18 @@ export default function ProjectsView({ ctx }) {
             <input
               className="input"
               type="search"
-              placeholder="חיפוש חופשי: יזם, שמאי, כתובת, מס׳ תכנית…"
+              placeholder="חיפוש לפי מילות מפתח: יזם, שמאי, רחוב, מס׳ תכנית, מילה מההערות…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label="חיפוש"
             />
           </div>
-          <select className="input select" value={groupBy} onChange={(e) => setGroupBy(e.target.value)} aria-label="קיבוץ">
-            <option value="">ללא קיבוץ</option>
-            <option value="רובע">קיבוץ לפי רובע</option>
-            <option value="__avg">קיבוץ לפי רווחיות</option>
-            <option value="סטטוס רמזור">קיבוץ לפי סטטוס</option>
-          </select>
+          <label className="inline-field">
+            <span className="label">קיבוץ לפי</span>
+            <select className="input select" value={groupBy} onChange={(e) => setGroupBy(e.target.value)} aria-label="קיבוץ">
+              {GROUPS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+            </select>
+          </label>
           <span className="spacer" />
           <button className="btn btn-primary" onClick={() => setAdding(true)}>פרויקט חדש</button>
           <button className="btn btn-ghost" onClick={onExport}>ייצוא Excel</button>
@@ -158,24 +240,33 @@ export default function ProjectsView({ ctx }) {
           <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={onImport} data-testid="import-file" />
         </div>
 
-        <div className="result-line label">
-          {q ? `${rows.length} תוצאות מתוך ${projects.length}` : `${projects.length} פרויקטים`}
-          {sort.col && <button className="link-btn" onClick={() => setSort({ col: null, asc: true })}>ניקוי מיון</button>}
+        <div className="chips" role="group" aria-label="סינון מהיר">
+          {CHIPS.map((c) => {
+            const on = chips.includes(c.id);
+            const n = allRows.filter(c.test).length;
+            return (
+              <button key={c.id} className={`chip-btn${on ? ' on' : ''}`} aria-pressed={on}
+                onClick={() => setChips(on ? chips.filter((x) => x !== c.id) : [...chips, c.id])}>
+                {c.label} <span className="mono">{n}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="table-head-line">
+          <span className="label">
+            {q || chips.length ? `${rows.length} תוצאות מתוך ${projects.length}` : `${projects.length} פרויקטים`}
+            {sortedLabel && <> · ממוין לפי {sortedLabel} <button className="link-btn" onClick={() => setSort({ col: null, asc: true })}>ניקוי מיון</button></>}
+          </span>
+          <BenchmarkLegend compact />
         </div>
 
         <div className="table-wrap">
-          <table className="table table-projects">
+          <table className="table table-projects" data-sorted={sort.col || ''}>
             <thead>
               <tr>
                 <th className="col-num">#</th>
-                {COLS.map((c) => (
-                  <th key={c.key} aria-sort={sort.col === c.key ? (sort.asc ? 'ascending' : 'descending') : 'none'}>
-                    <button className={`th-btn${sort.col === c.key ? ' sorted' : ''}`} onClick={() => toggleSort(c.key)}>
-                      {c.label}
-                      <span className="sort-mark">{sort.col === c.key ? (sort.asc ? '↑' : '↓') : ''}</span>
-                    </button>
-                  </th>
-                ))}
+                {COLS.map((c) => <SortHeader key={c.key} label={c.label} col={c.key} sort={sort} onSort={toggleSort} />)}
                 <th className="col-actions"><span className="sr-only">פעולות</span></th>
               </tr>
             </thead>
@@ -189,11 +280,12 @@ export default function ProjectsView({ ctx }) {
                     </td>
                   </tr>
                 )}
-                {g.rows.map(({ e, avg }, i) => {
-                  const p = e.project;
+                {g.rows.map((r, i) => {
+                  const { e, p } = r;
                   const id = p._id;
                   const isEdit = editing === id;
                   const isOpen = expanded === id;
+                  const sc = (k) => (sort.col === k ? 'td-sorted' : '');
                   return (
                     <React.Fragment key={id}>
                       <motion.tr
@@ -216,16 +308,19 @@ export default function ProjectsView({ ctx }) {
                           </td>
                         )) : (
                           <>
-                            <td data-label="רובע"><span className="quarter">{p['רובע'] || '—'}</span></td>
-                            <td data-label="יזם" className="strong">{p['שם היזם'] || '—'}</td>
-                            <td data-label="כתובת">{p['כתובת הפרויקט'] || '—'}</td>
-                            <td data-label="מס׳ תכנית" className="mono">{p["מס' תכנית/ מס זמני"] || '—'}</td>
-                            <td data-label="תכנית">{p['שם התכנית'] || '—'}</td>
-                            <td data-label="סטטוס"><StatusPill value={p['סטטוס רמזור']} /></td>
+                            <td data-label="רובע" className={sc('רובע')}><span className="quarter">{p['רובע'] || '—'}</span></td>
+                            <td data-label="פרויקט" className={sc('שם התכנית')}>
+                              <span className="project-name">{projectName(p)}</span>
+                              {p['שם התכנית'] && p['כתובת הפרויקט'] && <span className="project-sub">{p['כתובת הפרויקט']}</span>}
+                            </td>
+                            <td data-label="יזם" className={sc('שם היזם')}>{p['שם היזם'] || '—'}</td>
+                            <td data-label="מס׳ תכנית" className={`mono ${sc("מס' תכנית/ מס זמני")}`}>{p["מס' תכנית/ מס זמני"] || '—'}</td>
+                            <td data-label="סטטוס" className={sc('סטטוס רמזור')}><StatusPill value={p['סטטוס רמזור']} /></td>
                           </>
                         )}
-                        <td data-label="חוו״ד" className="mono">{e.opinions.length}</td>
-                        <td data-label="רווחיות"><ProfitMeter value={avg} /></td>
+                        <td data-label="גורם מעקב" className={sc('__follow')}><FollowBadge follow={r.follow} /></td>
+                        <td data-label="חוו״ד" className={`mono ${sc('__count')}`}>{e.opinions.length}</td>
+                        <td data-label="רווחיות" className={sc('__profit')}><ProfitPair dev={r.dev} city={r.city} /></td>
                         <td className="col-actions">
                           {isEdit ? (
                             <div className="row-actions">
@@ -266,7 +361,7 @@ export default function ProjectsView({ ctx }) {
           </table>
           {rows.length === 0 && (
             <div className="empty">
-              <p>{q ? 'אין פרויקטים שתואמים את החיפוש.' : 'המאגר ריק. הוסיפו פרויקט ראשון או ייבאו קובץ Excel.'}</p>
+              <p>{q || chips.length ? 'אין פרויקטים שתואמים את החיפוש.' : 'המאגר ריק. הוסיפו פרויקט ראשון או ייבאו קובץ Excel.'}</p>
             </div>
           )}
         </div>
@@ -282,12 +377,13 @@ function Overview({ stats }) {
   const segs = [
     { k: 'בוצע', tone: 'green' }, { k: 'בטיפול', tone: 'amber' }, { k: 'הוגש', tone: 'red' }, { k: '', tone: 'none', label: 'ללא סטטוס' }
   ];
+  const cityWait = stats.open.filter((o) => SIDE(o.who) === 'city').length;
   const tiles = [
     { label: 'פרויקטים', value: stats.projects },
     { label: 'חוות דעת', value: stats.opinions },
-    { label: 'רווחיות יזם ממוצעת', value: stats.avgDev !== null ? stats.avgDev.toFixed(1) + '%' : '—' },
-    { label: `מעל סף ${PROFIT_THRESHOLD}%`, value: stats.abovePct !== null ? Math.round(stats.abovePct) + '%' : '—' },
-    { label: 'זמן טיפול חציוני', value: stats.medianTurn !== null ? `${stats.medianTurn} ימים` : '—' }
+    { label: `רווחיות יזם ממוצעת · בנצ'מרק ${PROFIT_THRESHOLD}%`, value: stats.avgDev !== null ? stats.avgDev.toFixed(1) + '%' : '—', color: profitColor(stats.avgDev) },
+    { label: 'ממתינים לעירייה / ליזם', value: `${cityWait} / ${stats.open.length - cityWait}` },
+    { label: 'זמן טיפול חציוני', value: stats.medianTurn !== null ? formatDuration(stats.medianTurn) : '—', small: true }
   ];
   return (
     <div className="overview">
@@ -301,7 +397,7 @@ function Overview({ stats }) {
             transition={{ duration: 0.6, delay: 0.08 * i, ease }}
           >
             <span className="label">{t.label}</span>
-            <span className="tile-value">{t.value}</span>
+            <span className={`tile-value${t.small ? ' tile-value-s' : ''}`} style={t.color ? { color: t.color } : undefined}>{t.value}</span>
           </motion.div>
         ))}
       </div>
@@ -330,37 +426,53 @@ function Overview({ stats }) {
   );
 }
 
-function Waiting({ open }) {
+function Waiting({ open, ctx }) {
   const [all, setAll] = useState(false);
-  const list = all ? open : open.slice(0, 4);
+  const [side, setSide] = useState('all');
+  const filtered = side === 'all' ? open : open.filter((o) => SIDE(o.who) === side);
+  const list = all ? filtered : filtered.slice(0, 4);
+  const settings = ctx.data.settings || {};
+  const byId = new Map(ctx.data.projects.map((e) => [e.project._id, e.project]));
   return (
     <section className="panel panel-waiting">
       <div className="panel-head">
         <div>
           <span className="label">דורש מעקב</span>
-          <h2 className="display-s">בקשות שטרם התקבלה עליהן חוו״ד</h2>
+          <h2 className="display-s">בקשות שטרם התקבלה עליהן חוות דעת</h2>
         </div>
-        <span className="count-badge mono">{open.length}</span>
+        <div className="seg-control" role="radiogroup" aria-label="סינון לפי גורם">
+          {[['all', `הכול ${open.length}`], ['city', `עירייה ${open.filter((o) => SIDE(o.who) === 'city').length}`], ['dev', `יזם ${open.filter((o) => SIDE(o.who) === 'dev').length}`]].map(([v, l]) => (
+            <button key={v} role="radio" aria-checked={side === v} className={side === v ? 'on' : ''} onClick={() => setSide(v)}>{l}</button>
+          ))}
+        </div>
       </div>
       <div className="waiting-grid">
         {list.map((o, i) => (
-          <motion.a
-            key={o.opinionId}
-            href={`#/p/${o.projectId}`}
-            className="waiting-card"
+          <motion.div
+            key={o.projectId}
+            className={`waiting-card waiting-${SIDE(o.who)}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05, duration: 0.4, ease }}
           >
-            <span className="waiting-days"><b>{o.waiting}</b> ימים</span>
-            <span className="strong">{o.developer}</span>
-            <span className="muted">{o.address}</span>
-            <span className="label">{o.cityAppraiser || 'שמאי עירייה לא שובץ'}</span>
-          </motion.a>
+            <span className="waiting-who">
+              ממתין ל<b>{o.who}</b>{o.inferred && <span className="muted" title="לא הוגדר במפורש, הוסק מההערות"> · משוער</span>}
+            </span>
+            <span className="waiting-name">{o.name || 'לא צוין שם'}</span>
+            <span className="waiting-days">{formatDuration(o.waiting)}</span>
+            <a className="project-name waiting-project" href={`#/p/${o.projectId}`}>{o.plan || o.address || o.developer}</a>
+            <span className="muted">יזם: {o.developer}</span>
+            <div className="waiting-actions">
+              <button className="btn btn-sm btn-primary" onClick={() => ctx.openMail(reminderRequest(byId.get(o.projectId), o, settings))}>
+                מייל תזכורת ל{o.who}
+              </button>
+              <a className="btn btn-sm btn-ghost" href={`#/p/${o.projectId}`}>לכרטיס</a>
+            </div>
+          </motion.div>
         ))}
       </div>
-      {open.length > 4 && (
-        <button className="link-btn" onClick={() => setAll(!all)}>{all ? 'הצג פחות' : `הצג את כל ${open.length}`}</button>
+      {filtered.length > 4 && (
+        <button className="link-btn" onClick={() => setAll(!all)}>{all ? 'הצג פחות' : `הצג את כל ${filtered.length}`}</button>
       )}
     </section>
   );
@@ -373,18 +485,18 @@ function OpinionStrip({ entry }) {
       {ops.length === 0 && <p className="muted">אין עדיין חוות דעת לפרויקט זה.</p>}
       <ol className="timeline">
         {ops.map((o, i) => {
-          const gap = calcGap(o['רווחיות יזם (%)'], o['רווחיות עירייה (%)']);
+          const dev = parsePercent(o['רווחיות יזם (%)']);
+          const city = parsePercent(o['רווחיות עירייה (%)']);
           return (
             <li key={o._id} className="timeline-item">
-              <span className="timeline-dot" />
-              <span className="label">חוו״ד {i + 1} · {o['תאריך קבלת חוו"ד'] || o['תאריך קבלת בקשה'] || 'ללא תאריך'}</span>
+              <span className="timeline-dot" style={{ borderColor: profitColor(dev) }} />
+              <span className="label">חוו״ד {i + 1} · בקשה {o['תאריך קבלת בקשה'] || '—'} · חוו״ד {o['תאריך קבלת חוו"ד'] || 'טרם התקבלה'}</span>
               <span className="timeline-main">
-                {o['שמאי מטעם היזם'] || '—'} <span className="muted">מול</span> {o['שמאי מטעם העירייה'] || '—'}
+                <span className="role">שמאי יזם:</span> {o['שמאי מטעם היזם'] || '—'}
+                <span className="sep" />
+                <span className="role">שמאי עירייה:</span> {o['שמאי מטעם העירייה'] || '—'}
               </span>
-              <span className="timeline-meta mono">
-                {o['רווחיות יזם (%)'] || '—'}
-                {gap.text && <span className={`gap gap-${gap.tone}`}> · פער {gap.text}</span>}
-              </span>
+              <ProfitPair dev={dev} city={city} compact />
               {o['הערות / סטטוס'] && <span className="timeline-note">{o['הערות / סטטוס']}</span>}
             </li>
           );

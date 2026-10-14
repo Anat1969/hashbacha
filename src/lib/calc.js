@@ -39,19 +39,26 @@ export function latestDevProfit(entry) {
   return null;
 }
 
-// Green below the threshold, amber at it, red above. Matches the legacy scale.
+// Danger scale against the benchmark: green below it (paler as it nears), red above it (deeper as it climbs).
 export function profitColor(p) {
   if (p === null || p === undefined) return 'var(--ink-4)';
-  const v = Math.max(0, Math.min(30, p));
-  let r, g, b;
-  if (v <= PROFIT_THRESHOLD) {
-    const t = v / PROFIT_THRESHOLD;
-    r = 39 + t * (196 - 39); g = 150 + t * (150 - 150); b = 90 + t * (30 - 90);
-  } else {
-    const t = (v - PROFIT_THRESHOLD) / PROFIT_THRESHOLD;
-    r = 196 + t * (180 - 196); g = 150 + t * (50 - 150); b = 30 + t * (40 - 30);
-  }
-  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+  const mix = (a, b, t) => a.map((x, i) => Math.round(x + (b[i] - x) * t));
+  const DEEP_GREEN = [24, 112, 66], SOFT_GREEN = [120, 168, 96];
+  const SOFT_RED = [214, 104, 84], DEEP_RED = [150, 28, 22];
+  const c = p <= PROFIT_THRESHOLD
+    ? mix(DEEP_GREEN, SOFT_GREEN, Math.max(0, p) / PROFIT_THRESHOLD)
+    : mix(SOFT_RED, DEEP_RED, Math.min(1, (p - PROFIT_THRESHOLD) / 10));
+  return `rgb(${c.join(',')})`;
+}
+
+// For a gap the risk is the size of the disagreement, whichever side is higher.
+export const GAP_ALERT = 3;
+export function gapColor(g) {
+  if (g === null || g === undefined) return 'var(--ink-4)';
+  const a = Math.abs(g);
+  const mix = (x, y, t) => x.map((v, i) => Math.round(v + (y[i] - v) * t));
+  const c = a <= GAP_ALERT ? mix([24, 112, 66], [120, 168, 96], a / GAP_ALERT) : mix([214, 104, 84], [150, 28, 22], Math.min(1, (a - GAP_ALERT) / 5));
+  return `rgb(${c.join(',')})`;
 }
 
 export function parseDate(str) {
@@ -100,6 +107,8 @@ export function flatOpinions(projects) {
         idx,
         developer: (p['שם היזם'] || '').trim() || 'לא ידוע',
         address: p['כתובת הפרויקט'] || '',
+        plan: p['שם התכנית'] || p['כתובת הפרויקט'] || '',
+        quarter: p['רובע'] || '',
         devAppraiser: (o['שמאי מטעם היזם'] || '').trim(),
         cityAppraiser: (o['שמאי מטעם העירייה'] || '').trim(),
         dev, city,
@@ -120,11 +129,17 @@ export function overview(projects, now = new Date()) {
   const turn = ops.map((o) => o.turnaround).filter((v) => v !== null);
   const medianTurn = turn.length ? turn.slice().sort((a, b) => a - b)[Math.floor(turn.length / 2)] : null;
   // Only a project's latest opinion can be "open"; earlier rows were superseded.
-  const lastIdx = new Map();
-  ops.forEach((o) => lastIdx.set(o.projectId, o.idx));
-  const open = ops
-    .filter((o) => o.req && !o.got && lastIdx.get(o.projectId) === o.idx)
-    .map((o) => ({ ...o, waiting: daysBetween(o.req, now) }))
+  const open = projects
+    .map((e) => ({ e, f: followUp(e, now) }))
+    .filter(({ f }) => f)
+    .map(({ e, f }) => ({
+      ...f,
+      projectId: e.project._id,
+      developer: (e.project['שם היזם'] || '').trim() || 'לא ידוע',
+      plan: e.project['שם התכנית'] || '',
+      address: e.project['כתובת הפרויקט'] || '',
+      waiting: f.days
+    }))
     .sort((a, b) => b.waiting - a.waiting);
   const status = { 'הוגש': 0, 'בטיפול': 0, 'בוצע': 0, '': 0 };
   projects.forEach((e) => { const s = e.project['סטטוס רמזור'] || ''; status[s in status ? s : ''] += 1; });
@@ -141,4 +156,70 @@ export function overview(projects, now = new Date()) {
 
 export function mean(arr) {
   return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+}
+
+// "2 שנים, 3 חודשים ו־12 ימים"
+export function formatDuration(days) {
+  if (days === null || days === undefined) return '—';
+  if (days < 0) return '—';
+  const y = Math.floor(days / 365);
+  const m = Math.floor((days % 365) / 30);
+  const d = (days % 365) % 30;
+  const parts = [];
+  if (y) parts.push(y === 1 ? 'שנה' : y === 2 ? 'שנתיים' : `${y} שנים`);
+  if (m) parts.push(m === 1 ? 'חודש' : m === 2 ? 'חודשיים' : `${m} חודשים`);
+  if (d || !parts.length) parts.push(d === 1 ? 'יום' : `${d} ימים`);
+  return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' ו־' + parts[parts.length - 1] : parts[0];
+}
+
+export const FOLLOW_OPTIONS = ['שמאי העירייה', 'שמאי היזם', 'היזם', 'העירייה'];
+
+// Who the latest open request is waiting on. Explicit field wins; otherwise inferred from the notes.
+export function followUp(entry, now = new Date()) {
+  const ops = entry.opinions;
+  if (!ops.length) return null;
+  const o = ops[ops.length - 1];
+  const req = parseDate(o['תאריך קבלת בקשה']);
+  const got = parseDate(o['תאריך קבלת חוו"ד']);
+  if (!req || got) return null;
+  const explicit = (o['ממתין ל'] || '').trim();
+  const notes = o['הערות / סטטוס'] || '';
+  let who = explicit;
+  let inferred = false;
+  if (!who) {
+    inferred = true;
+    who = /ממתין/.test(notes) && /היזם/.test(notes) ? 'היזם' : 'שמאי העירייה';
+  }
+  const name = who === 'שמאי העירייה' ? (o['שמאי מטעם העירייה'] || '').trim()
+    : who === 'שמאי היזם' ? (o['שמאי מטעם היזם'] || '').trim()
+    : who === 'היזם' ? (entry.project['שם היזם'] || '').trim() : '';
+  return { who, name, inferred, since: req, days: daysBetween(req, now), opinion: o };
+}
+
+export const SIDE = (who) => (who === 'שמאי העירייה' || who === 'העירייה' ? 'city' : 'dev');
+
+// Every keyword must appear somewhere in the project or its opinions.
+export function matchKeywords(entry, query, notes = []) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = [
+    ...Object.values(entry.project),
+    ...entry.opinions.flatMap((o) => Object.values(o)),
+    ...notes.map((n) => n.body)
+  ].join(' ').toLowerCase();
+  return words.every((w) => hay.includes(w));
+}
+
+export const REPORT_FIELDS = [
+  { key: 'מס יחידות קימיות', label: 'מספר יחידות קיימות' },
+  { key: 'סה"כ יחידות בתכנית', label: 'סך יחידות בתכנית' },
+  { key: 'רווחיות יזם (%)', label: 'שיעור רווחיות היזם בדוח הכלכלי' },
+  { key: 'דו"ח אחרון מעודכן', label: 'תאריך הדוח הכלכלי המעודכן' },
+  { key: 'שמאי מטעם היזם', label: 'שם שמאי היזם' },
+  { key: 'תאריך קבלת בקשה', label: 'תאריך הגשת הבקשה' }
+];
+
+export function missingReportFields(opinion) {
+  if (!opinion) return REPORT_FIELDS.slice();
+  return REPORT_FIELDS.filter((f) => !String(opinion[f.key] || '').trim());
 }

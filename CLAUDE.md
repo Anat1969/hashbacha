@@ -15,9 +15,15 @@
 - The gate screen explains how to get in; Settings shows a copyable entry link for sharing with the team.
 - Vercel's production branch is `main`, not the repo default branch: after merging, deploy production manually (`create_deployment` with `target: production`).
 
+## Notes, mail, contacts
+
+- `hb_notes` (kinds: todo/ask/remember/note, optional project_id, due, done). Project card shows filed notes plus a merged timeline of opinion events and dated note lines.
+- Every mail opens in `MailComposer` for editing first, then Gmail / Outlook web / mailto / copy. Browsers cannot be forced to Chrome; web compose opens in the current browser.
+- Contacts live in `hb_settings.data.contacts` [{name, role, email}]; an address typed in a draft is saved there.
+
 ## Testing
 
-`npm run build && npm test` — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (96 checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
 ## Design language
@@ -27,7 +33,10 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 ## Domain notes
 
 - Profit threshold is 15%. Ranges like "10-16%" resolve to their midpoint and are tagged "טווח".
-- Arrows in analytics: green ↑ above 15%, red ↓ at or below (explicit user request).
+- Colour = risk (user feedback 2026-10-14). Profit: gradient green below the 15% benchmark, red above it (`profitColor`). Gap (developer minus city): risk is the size of the disagreement either way, green under 3 points, red above (`gapColor`). Arrows follow the same rule: ↑ red above the benchmark, ↓ green at or below.
+- Always show both sides of profitability (developer and city) and prefix names with their role ("שמאי יזם: ...").
+- Durations are shown in years, months and days (`formatDuration`).
+- Follow-up party ("ממתין ל") is an opinion field: שמאי העירייה / שמאי היזם / היזם / העירייה. When empty it is inferred from the notes and marked "משוער".
 - Notes field: added text is stamped with today's date on its own line.
 - "Waiting" = a project's latest opinion has a request date but no opinion date.
 

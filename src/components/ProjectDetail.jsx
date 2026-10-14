@@ -1,14 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
-import { OPINION_FIELDS, OPINION_GROUPS, PROJECT_FIELDS, STATUS_OPTIONS } from '../lib/fields.js';
-import { avgDevProfit, calcGap, isRange, parsePercent, profitColor, stampNotes } from '../lib/calc.js';
-import { mailtoHref, newProjectMail, opinionReadyMail } from '../lib/mail.js';
+import { OPINION_FIELDS, PROJECT_FIELDS, STATUS_OPTIONS } from '../lib/fields.js';
+import {
+  FOLLOW_OPTIONS, daysBetween, followUp, formatDuration, isRange, missingReportFields, parseDate, parsePercent,
+  profitColor, stampNotes
+} from '../lib/calc.js';
+import { missingDetailsRequest, newProjectRequest, opinionReadyRequest, reminderRequest } from '../lib/mailRequests.js';
 import { PROFIT_THRESHOLD } from '../lib/config.js';
 import { StatusPill, ease } from './ui.jsx';
+import { BenchmarkLegend } from './Legend.jsx';
+import { ProfitPair } from './ProjectsView.jsx';
+import { NoteComposer, NoteList, formatStamp } from './Notes.jsx';
 
-const FIELD_BY_KEY = Object.fromEntries(OPINION_FIELDS.map((f) => [f.key, f]));
-const ORDERED = OPINION_GROUPS.flatMap((g) => g.keys);
+const F = Object.fromEntries(OPINION_FIELDS.map((f) => [f.key, f]));
+const projectName = (p) => p['שם התכנית'] || p['כתובת הפרויקט'] || 'ללא שם';
 
 export default function ProjectDetail({ ctx, entry }) {
   const p = entry.project;
@@ -20,8 +26,13 @@ export default function ProjectDetail({ ctx, entry }) {
   useEffect(() => { if (!editMode) setDraft(p); }, [p, editMode]);
 
   const dirty = useMemo(() => PROJECT_FIELDS.filter((f) => (draft[f.key] || '') !== (p[f.key] || '')).length, [draft, p]);
-  const avg = avgDevProfit(entry);
   const settings = ctx.data.settings || {};
+  const follow = followUp(entry);
+  const latest = entry.opinions[entry.opinions.length - 1] || null;
+  const latestDevOp = [...entry.opinions].reverse().find((o) => parsePercent(o['רווחיות יזם (%)']) !== null);
+  const latestCityOp = [...entry.opinions].reverse().find((o) => parsePercent(o['רווחיות עירייה (%)']) !== null);
+  const notes = (ctx.data.notes || []).filter((n) => n.project_id === p._id);
+  const missing = missingReportFields(latest);
 
   async function saveProject() {
     const res = await ctx.mutate((k) => api.saveProject(k, p._id, draft), 'הפרויקט עודכן');
@@ -29,7 +40,7 @@ export default function ProjectDetail({ ctx, entry }) {
   }
 
   async function removeProject() {
-    const ok = await ctx.confirm(`להעביר את "${p['שם היזם'] || 'הפרויקט'}" לסל המחזור? אפשר לשחזר בכל עת.`, 'העבר לסל');
+    const ok = await ctx.confirm(`להעביר את "${projectName(p)}" לסל המחזור? אפשר לשחזר בכל עת.`, 'העבר לסל');
     if (!ok) return;
     const res = await ctx.mutate((k) => api.removeProject(k, p._id));
     if (res !== null) {
@@ -66,6 +77,11 @@ export default function ProjectDetail({ ctx, entry }) {
     await ctx.mutate((k) => api.removeOpinion(k, o._id), 'חוות הדעת נמחקה');
   }
 
+  async function setFollowWho(who) {
+    if (!latest) return;
+    await ctx.mutate((k) => api.saveOpinion(k, p._id, latest._id, { ...latest, 'ממתין ל': who }), 'גורם המעקב עודכן');
+  }
+
   return (
     <div className="page page-detail">
       <a className="back" href="#/">חזרה לכל הפרויקטים</a>
@@ -73,25 +89,51 @@ export default function ProjectDetail({ ctx, entry }) {
       <section className="detail-hero">
         <div className="detail-title">
           <span className="label">רובע {p['רובע'] || '—'} · {p["מס' תכנית/ מס זמני"] || 'ללא מס׳ תכנית'}</span>
-          <h1 className="display-l">{p['שם היזם'] || 'ללא שם יזם'}</h1>
-          <p className="lead">{[p['שם התכנית'], p['כתובת הפרויקט']].filter(Boolean).join(' · ') || '—'}</p>
+          <h1 className="display-l project-title">{projectName(p)}</h1>
+          <p className="lead"><span className="role">יזם:</span> {p['שם היזם'] || '—'}{p['כתובת הפרויקט'] && p['שם התכנית'] ? ` · ${p['כתובת הפרויקט']}` : ''}</p>
           <div className="detail-badges">
             <StatusPill value={p['סטטוס רמזור']} />
             {p['קישור'] && <a className="chip" href={p['קישור']} target="_blank" rel="noreferrer">קישור לתכנית</a>}
           </div>
         </div>
         <div className="detail-figures">
+          <div className="figure figure-wide">
+            <span className="label">רווחיות אחרונה · יזם מול עירייה · בנצ'מרק {PROFIT_THRESHOLD}%</span>
+            <ProfitPair dev={latestDevOp ? parsePercent(latestDevOp['רווחיות יזם (%)']) : null} city={latestCityOp ? parsePercent(latestCityOp['רווחיות עירייה (%)']) : null} />
+          </div>
           <div className="figure">
             <span className="label">חוות דעת</span>
             <span className="figure-value">{entry.opinions.length}</span>
           </div>
-          <div className="figure">
-            <span className="label">רווחיות יזם ממוצעת</span>
-            <span className="figure-value" style={{ color: avg !== null ? profitColor(avg) : undefined }}>
-              {avg !== null ? avg.toFixed(1) + '%' : '—'}
-            </span>
-          </div>
           <Trend opinions={entry.opinions} />
+        </div>
+      </section>
+
+      <section className={`panel panel-follow${follow ? ' is-open' : ''}`}>
+        <div className="panel-head">
+          <div>
+            <span className="label">גורם מעקב</span>
+            <h2 className="display-s">
+              {follow ? <>ממתין ל{follow.who}{follow.name ? `: ${follow.name}` : ''}</> : 'אין בקשה פתוחה'}
+            </h2>
+            {follow && (
+              <p className="muted follow-line">
+                הבקשה הועברה ב־{follow.opinion['תאריך קבלת בקשה']} · ממתינה <b>{formatDuration(follow.days)}</b>
+                {follow.inferred && ' · גורם המעקב הוסק מההערות. אפשר לקבוע אותו במפורש:'}
+              </p>
+            )}
+          </div>
+          <div className="panel-actions">
+            {follow && (
+              <>
+                <select className="input select" aria-label="ממתין ל" value={latest?.['ממתין ל'] || ''} onChange={(e) => setFollowWho(e.target.value)}>
+                  <option value="">ממתין ל… (אוטומטי)</option>
+                  {FOLLOW_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <button className="btn btn-primary" onClick={() => ctx.openMail(reminderRequest(p, follow, settings))}>מייל תזכורת ל{follow.who}</button>
+              </>
+            )}
+          </div>
         </div>
       </section>
 
@@ -103,10 +145,6 @@ export default function ProjectDetail({ ctx, entry }) {
           </div>
           <div className="panel-actions">
             {!editMode && <button className="btn btn-ghost" onClick={() => setEditMode(true)}>עריכת פרטים</button>}
-            <a className="btn btn-ghost" href={mailtoHref(newProjectMail(p, settings.ilanitEmail))}
-              onClick={() => ctx.toast('נפתחה טיוטת מייל לאילנית')}>מייל: פרויקט חדש</a>
-            <a className="btn btn-ghost" href={mailtoHref(opinionReadyMail(p, settings.planningEmail))}
-              onClick={() => ctx.toast('נפתחה טיוטת מייל לאגף תכנון')}>מייל: קיימת חוו״ד</a>
             <button className="btn btn-ghost btn-quiet" onClick={removeProject}>מחיקת פרויקט</button>
           </div>
         </div>
@@ -125,7 +163,7 @@ export default function ProjectDetail({ ctx, entry }) {
                     value={draft[f.key] || ''} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })} />
                 )
               ) : (
-                <span className="fact-value">
+                <span className={`fact-value${f.key === 'שם התכנית' ? ' project-name' : ''}`}>
                   {f.type === 'status' ? <StatusPill value={p[f.key]} />
                     : f.type === 'url' && p[f.key] ? <a href={p[f.key]} target="_blank" rel="noreferrer" dir="ltr">{p[f.key]}</a>
                     : (p[f.key] || '—')}
@@ -139,6 +177,35 @@ export default function ProjectDetail({ ctx, entry }) {
       <section className="panel">
         <div className="panel-head">
           <div>
+            <span className="label">מיילים מוכנים · כל מייל נפתח לעריכה לפני שליחה</span>
+            <h2 className="display-s">תקשורת</h2>
+          </div>
+        </div>
+        <div className="mail-actions">
+          <button className="mail-card" onClick={() => ctx.openMail(newProjectRequest(p, settings))}>
+            <b>לאילנית: פרויקט חדש</b>
+            <span>בקשה לשיבוץ שמאי מטעם העירייה</span>
+          </button>
+          <button className="mail-card" onClick={() => ctx.openMail(opinionReadyRequest(p, settings, latest))}>
+            <b>לאגף תכנון: התקבלה חוות דעת</b>
+            <span>כולל שמאי, תאריך ורווחיות של שני הצדדים</span>
+          </button>
+          <button className="mail-card" onClick={() => ctx.openMail(missingDetailsRequest(p, latest, settings))}>
+            <b>לשמאי היזם וליזם: השלמת פרטים</b>
+            <span>{missing.length ? `חסרים ${missing.length} פרטים: ${missing.slice(0, 2).map((m) => m.label).join(', ')}${missing.length > 2 ? '…' : ''}` : 'לא זוהו פרטים חסרים בחוות הדעת האחרונה'}</span>
+          </button>
+          {follow && (
+            <button className="mail-card" onClick={() => ctx.openMail(reminderRequest(p, follow, settings))}>
+              <b>תזכורת ל{follow.who}</b>
+              <span>ממתין {formatDuration(follow.days)}</span>
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
             <span className="label">רצף בקשות וחוות דעת</span>
             <h2 className="display-s">חוות דעת</h2>
           </div>
@@ -146,34 +213,41 @@ export default function ProjectDetail({ ctx, entry }) {
             <button className="btn btn-primary" onClick={() => startOp(null)}>חוות דעת חדשה</button>
           </div>
         </div>
-        <div className="table-wrap">
-          <table className="table table-opinions">
-            <thead>
-              <tr className="group-head">
-                <th rowSpan={2} className="col-num">#</th>
-                {OPINION_GROUPS.map((g) => <th key={g.label} colSpan={g.keys.length}>{g.label}</th>)}
-                <th rowSpan={2} className="col-actions"><span className="sr-only">פעולות</span></th>
-              </tr>
-              <tr>
-                {ORDERED.map((k) => <th key={k}>{k === '__gap' ? 'פער' : FIELD_BY_KEY[k].label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {entry.opinions.map((o, i) => (
-                editingOp === o._id
-                  ? <OpinionEditRow key={o._id} n={i + 1} draft={opDraft} setDraft={setOpDraft} onSave={saveOp} onCancel={() => setEditingOp(null)} />
-                  : <OpinionRow key={o._id} o={o} n={i + 1} onEdit={() => startOp(o)} onDelete={() => removeOp(o, i)} />
-              ))}
-              {editingOp === '__new__' && (
-                <OpinionEditRow n={entry.opinions.length + 1} draft={opDraft} setDraft={setOpDraft} onSave={saveOp} onCancel={() => setEditingOp(null)} isNew />
-              )}
-            </tbody>
-          </table>
+        <BenchmarkLegend compact />
+        <div className="opinion-list">
+          {entry.opinions.map((o, i) => (
+            editingOp === o._id
+              ? <OpinionForm key={o._id} n={i + 1} draft={opDraft} setDraft={setOpDraft} onSave={saveOp} onCancel={() => setEditingOp(null)} />
+              : <OpinionCard key={o._id} o={o} n={i + 1} onEdit={() => startOp(o)} onDelete={() => removeOp(o, i)} />
+          ))}
+          {editingOp === '__new__' && (
+            <OpinionForm n={entry.opinions.length + 1} draft={opDraft} setDraft={setOpDraft} onSave={saveOp} onCancel={() => setEditingOp(null)} isNew />
+          )}
           {entry.opinions.length === 0 && editingOp !== '__new__' && (
             <div className="empty"><p>אין עדיין חוות דעת. הוסיפו את הבקשה הראשונה.</p></div>
           )}
         </div>
-        <p className="hint">הוספת טקסט להערות מתויגת אוטומטית בתאריך היום. רווחיות בטווח (למשל 10%–16%) מחושבת לפי אמצע הטווח.</p>
+        <p className="hint">טקסט שנוסף להערות מתויג אוטומטית בתאריך היום. רווחיות בטווח (למשל 10%–16%) מחושבת לפי אמצע הטווח.</p>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="label">כל ההערות, המשימות והאירועים של הפרויקט במקום אחד</span>
+            <h2 className="display-s">תיק הפרויקט</h2>
+          </div>
+        </div>
+        <NoteComposer ctx={ctx} projectId={p._id} placeholder="הערה לתיק הפרויקט. תישמר עם תאריך ושם הכותב." />
+        <div className="file-grid">
+          <div>
+            <span className="label">הערות ומשימות</span>
+            <NoteList ctx={ctx} notes={notes} empty="אין עדיין הערות לתיק. הערות מהיומן שתויקו לפרויקט יופיעו כאן." />
+          </div>
+          <div>
+            <span className="label">ציר זמן מלא</span>
+            <FileTimeline entry={entry} notes={notes} />
+          </div>
+        </div>
       </section>
 
       <AnimatePresence>
@@ -200,77 +274,153 @@ export default function ProjectDetail({ ctx, entry }) {
   );
 }
 
-function OpinionRow({ o, n, onEdit, onDelete }) {
-  const gap = calcGap(o['רווחיות יזם (%)'], o['רווחיות עירייה (%)']);
+function Pct({ v }) {
+  const n = parsePercent(v);
+  if (!v) return <span className="muted">—</span>;
   return (
-    <tr className="row">
-      <td className="col-num" data-label="#"><span className="num">{String(n).padStart(2, '0')}</span></td>
-      {ORDERED.map((k) => {
-        if (k === '__gap') return <td key={k} data-label="פער" className={`mono gap gap-${gap.tone}${gap.text ? '' : ' is-empty'}`}>{gap.text || '—'}</td>;
-        const f = FIELD_BY_KEY[k];
-        const v = o[k] || '';
-        const empty = v.trim() ? '' : ' is-empty';
-        if (f.type === 'pct') {
-          const num = parsePercent(v);
-          return (
-            <td key={k} data-label={f.label} className={'mono' + empty}>
-              {v ? <span style={{ color: num !== null ? profitColor(num) : undefined }}>{v}</span> : '—'}
-              {isRange(v) && <span className="range-tag">טווח</span>}
-            </td>
-          );
-        }
-        if (f.type === 'textarea') return <td key={k} data-label={f.label} className={'notes' + empty}>{v || '—'}</td>;
-        return <td key={k} data-label={f.label} className={(f.type === 'date' || f.type === 'num' ? 'mono' : '') + empty}>{v || '—'}</td>;
-      })}
-      <td className="col-actions">
+    <span className="mono" style={{ color: profitColor(n) }}>
+      {v}{isRange(v) && <span className="range-tag">טווח</span>}
+    </span>
+  );
+}
+
+function OpinionCard({ o, n, onEdit, onDelete }) {
+  const req = parseDate(o['תאריך קבלת בקשה']);
+  const got = parseDate(o['תאריך קבלת חוו"ד']);
+  const span = req && got && got >= req ? daysBetween(req, got) : null;
+  const dev = parsePercent(o['רווחיות יזם (%)']);
+  const city = parsePercent(o['רווחיות עירייה (%)']);
+  const extra = [['ממתין ל', o['ממתין ל']], ['יח׳ קיימות', o['מס יחידות קימיות']], ['יח׳ בתכנית', o['סה"כ יחידות בתכנית']], ['דו״ח מעודכן', o['דו"ח אחרון מעודכן']], ['מימוש', o['מימוש']], ['ת.ב.', o['ת.ב.']], ['שמאי לתבע', o['שמאי לתבע']]]
+    .filter(([, v]) => String(v || '').trim());
+  return (
+    <motion.article className="opinion-card" layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease }}>
+      <header className="opinion-head">
+        <span className="opinion-num mono">{String(n).padStart(2, '0')}</span>
+        <div className="opinion-dates">
+          <span><span className="role">בקשה:</span> <span className="mono">{o['תאריך קבלת בקשה'] || '—'}</span></span>
+          <span className="arrow-sep">←</span>
+          <span><span className="role">חוו״ד:</span> <span className="mono">{o['תאריך קבלת חוו"ד'] || 'טרם התקבלה'}</span></span>
+          {span !== null && <span className="opinion-span">משך טיפול: {formatDuration(span)}</span>}
+        </div>
         <div className="row-actions">
           <button className="btn btn-sm btn-ghost" onClick={onEdit}>ערוך</button>
           <button className="btn btn-sm btn-ghost btn-quiet" onClick={onDelete}>מחק</button>
         </div>
-      </td>
-    </tr>
-  );
-}
-
-function OpinionEditRow({ n, draft, setDraft, onSave, onCancel, isNew }) {
-  const gap = calcGap(draft['רווחיות יזם (%)'], draft['רווחיות עירייה (%)']);
-  return (
-    <tr className={`row row-edit${isNew ? ' row-new' : ''}`}>
-      <td className="col-num" data-label="#"><span className="num">{String(n).padStart(2, '0')}</span></td>
-      {ORDERED.map((k) => {
-        if (k === '__gap') return <td key={k} data-label="פער" className={`mono gap gap-${gap.tone}`}>{gap.text || '—'}</td>;
-        const f = FIELD_BY_KEY[k];
-        return (
-          <td key={k} data-label={f.label}>
-            {f.type === 'textarea' ? (
-              <textarea className="input input-cell" aria-label={f.label} rows={3} value={draft[k] || ''}
-                onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
-            ) : (
-              <input className="input input-cell" aria-label={f.label} placeholder={f.placeholder || ''}
-                dir={f.type === 'date' || f.type === 'pct' || f.type === 'num' ? 'ltr' : undefined}
-                value={draft[k] || ''} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
-            )}
-          </td>
-        );
-      })}
-      <td className="col-actions">
-        <div className="row-actions">
-          <button className="btn btn-sm btn-primary" onClick={onSave}>שמור</button>
-          <button className="btn btn-sm btn-ghost" onClick={onCancel}>ביטול</button>
+      </header>
+      <div className="opinion-body">
+        <div className="opinion-people">
+          <span><span className="role">שמאי יזם:</span> {o['שמאי מטעם היזם'] || '—'}</span>
+          <span><span className="role">שמאי עירייה:</span> {o['שמאי מטעם העירייה'] || '—'}</span>
         </div>
-      </td>
-    </tr>
+        <div className="opinion-profit">
+          <ProfitPair dev={dev} city={city} />
+          {(isRange(o['רווחיות יזם (%)']) || isRange(o['רווחיות עירייה (%)'])) && (
+            <span className="hint">מקור: יזם <Pct v={o['רווחיות יזם (%)']} /> · עירייה <Pct v={o['רווחיות עירייה (%)']} /></span>
+          )}
+        </div>
+        {extra.length > 0 && (
+          <dl className="opinion-extra">
+            {extra.map(([k, v]) => <div key={k}><dt className="label">{k}</dt><dd>{v}</dd></div>)}
+          </dl>
+        )}
+        {o['הערות / סטטוס'] && <p className="opinion-notes">{o['הערות / סטטוס']}</p>}
+      </div>
+    </motion.article>
   );
 }
 
-// Developer profitability across the opinion sequence, against the threshold line.
+function OpinionForm({ n, draft, setDraft, onSave, onCancel, isNew }) {
+  const set = (k, v) => setDraft({ ...draft, [k]: v });
+  const groups = [
+    ['שמאים', ['שמאי מטעם היזם', 'שמאי מטעם העירייה']],
+    ['תאריכים', ['תאריך קבלת בקשה', 'תאריך קבלת חוו"ד', 'דו"ח אחרון מעודכן']],
+    ['רווחיות ויחידות', ['רווחיות יזם (%)', 'רווחיות עירייה (%)', 'מס יחידות קימיות', 'סה"כ יחידות בתכנית']],
+    ['מעקב', ['ממתין ל', 'מימוש', 'ת.ב.', 'שמאי לתבע']]
+  ];
+  const dev = parsePercent(draft['רווחיות יזם (%)']);
+  const city = parsePercent(draft['רווחיות עירייה (%)']);
+  return (
+    <article className={`opinion-card opinion-form${isNew ? ' opinion-new' : ''}`}>
+      <header className="opinion-head">
+        <span className="opinion-num mono">{String(n).padStart(2, '0')}</span>
+        <b>{isNew ? 'חוות דעת חדשה' : 'עריכת חוות דעת'}</b>
+        <span className="spacer" />
+        <ProfitPair dev={dev} city={city} compact />
+      </header>
+      {groups.map(([title, keys]) => (
+        <fieldset key={title} className="form-group">
+          <legend className="label">{title}</legend>
+          <div className="form-grid">
+            {keys.map((k) => {
+              const f = F[k];
+              return (
+                <label key={k} className="field">
+                  <span className="label">{k === 'שמאי מטעם היזם' ? 'שמאי מטעם היזם' : k === 'שמאי מטעם העירייה' ? 'שמאי מטעם העירייה' : f.label}</span>
+                  {f.type === 'follow' ? (
+                    <select className="input" aria-label={f.label} value={draft[k] || ''} onChange={(e) => set(k, e.target.value)}>
+                      <option value="">אוטומטי לפי ההערות</option>
+                      {FOLLOW_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                  ) : (
+                    <input className="input" aria-label={f.label} placeholder={f.placeholder || ''}
+                      dir={f.type === 'date' || f.type === 'pct' || f.type === 'num' ? 'ltr' : undefined}
+                      value={draft[k] || ''} onChange={(e) => set(k, e.target.value)} />
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      ))}
+      <label className="field">
+        <span className="label">הערות / סטטוס</span>
+        <textarea className="input" aria-label="הערות / סטטוס" rows={3} value={draft['הערות / סטטוס'] || ''} onChange={(e) => set('הערות / סטטוס', e.target.value)} />
+      </label>
+      <div className="form-actions">
+        <button className="btn btn-primary" onClick={onSave}>שמור חוות דעת</button>
+        <button className="btn btn-ghost" onClick={onCancel}>ביטול</button>
+      </div>
+    </article>
+  );
+}
+
+// Merges opinion events, dated note lines inside opinions, and project notes into one chronology.
+function FileTimeline({ entry, notes }) {
+  const items = [];
+  entry.opinions.forEach((o, i) => {
+    const req = parseDate(o['תאריך קבלת בקשה']);
+    const got = parseDate(o['תאריך קבלת חוו"ד']);
+    if (req) items.push({ d: req, kind: 'event', text: `התקבלה בקשה (חוו״ד ${i + 1})${o['שמאי מטעם היזם'] ? `, שמאי יזם: ${o['שמאי מטעם היזם']}` : ''}${o['רווחיות יזם (%)'] ? `, רווחיות לפי היזם ${o['רווחיות יזם (%)']}` : ''}` });
+    if (got) items.push({ d: got, kind: 'event', text: `התקבלה חוות דעת ${i + 1}${o['שמאי מטעם העירייה'] ? `, שמאי עירייה: ${o['שמאי מטעם העירייה']}` : ''}${o['רווחיות עירייה (%)'] ? `, רווחיות לפי העירייה ${o['רווחיות עירייה (%)']}` : ''}` });
+    String(o['הערות / סטטוס'] || '').split('\n').map((l) => l.trim()).filter(Boolean).forEach((line) => {
+      const m = line.match(/^(\d{1,2}\/\d{1,2}\/\d{2,4}):\s*(.*)$/);
+      const d = m ? parseDate(m[1]) : (got || req);
+      items.push({ d, kind: 'opnote', text: m ? m[2] : line, who: `הערה בחוו״ד ${i + 1}` });
+    });
+  });
+  notes.forEach((n) => items.push({ d: new Date(n.created_at), kind: 'note', text: n.body, who: n.author ? `${n.author}` : 'הערה' }));
+  items.sort((a, b) => (b.d ? b.d.getTime() : 0) - (a.d ? a.d.getTime() : 0));
+  if (!items.length) return <p className="muted">אין עדיין אירועים.</p>;
+  return (
+    <ol className="file-timeline">
+      {items.map((it, i) => (
+        <li key={i} className={`ft ft-${it.kind}`}>
+          <span className="ft-date mono">{it.d ? formatStamp(it.d.toISOString()) : 'ללא תאריך'}</span>
+          <span className="ft-text">{it.who && <span className="role">{it.who}: </span>}{it.text}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// Developer profitability across the opinion sequence, against the benchmark line.
 function Trend({ opinions }) {
   const pts = opinions.map((o) => parsePercent(o['רווחיות יזם (%)'])).filter((v) => v !== null);
   if (pts.length < 2) {
     return (
       <div className="figure figure-trend">
-        <span className="label">מגמת רווחיות</span>
-        <span className="muted">נדרשות שתי חוות דעת לפחות</span>
+        <span className="label">מגמת רווחיות יזם</span>
+        <span className="muted">נדרשות שתי חוות דעת עם רווחיות לפחות</span>
       </div>
     );
   }
@@ -281,7 +431,7 @@ function Trend({ opinions }) {
   const area = `${d} L${x(pts.length - 1)},${H} L${x(0)},${H} Z`;
   return (
     <div className="figure figure-trend">
-      <span className="label">מגמת רווחיות יזם</span>
+      <span className="label">מגמת רווחיות יזם לאורך חוות הדעת</span>
       <svg viewBox={`0 0 ${W} ${H}`} className="trend" role="img" aria-label="מגמת רווחיות לאורך חוות הדעת">
         <defs>
           <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
@@ -292,9 +442,9 @@ function Trend({ opinions }) {
         <line x1="0" x2={W} y1={y(PROFIT_THRESHOLD)} y2={y(PROFIT_THRESHOLD)} className="trend-threshold" />
         <path d={area} fill="url(#trendFill)" />
         <motion.path d={d} className="trend-line" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease }} />
-        {pts.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="3" className="trend-dot" style={{ fill: profitColor(v) }} />)}
+        {pts.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="3.5" className="trend-dot" style={{ fill: profitColor(v) }} />)}
       </svg>
-      <span className="label">קו מקווקו: סף {PROFIT_THRESHOLD}%</span>
+      <span className="label">קו מקווקו: בנצ'מרק {PROFIT_THRESHOLD}% · ימין: הראשונה</span>
     </div>
   );
 }

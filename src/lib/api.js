@@ -25,5 +25,7 @@ export const api = {
     rpc('hb_upsert_opinion', { p_key: key, p_project: projectId, p_id: id || null, p_data: data }),
   removeOpinion: (key, id) => rpc('hb_remove_opinion', { p_key: key, p_id: id }),
   saveSettings: (key, settings) => rpc('hb_save_settings', { p_key: key, p_settings: settings }),
+  saveNote: (key, id, data) => rpc('hb_upsert_note', { p_key: key, p_id: id || null, p_data: data }),
+  removeNote: (key, id) => rpc('hb_remove_note', { p_key: key, p_id: id }),
   replaceAll: (key, projects) => rpc('hb_replace_all', { p_key: key, p_projects: projects })
 };
