@@ -36,6 +36,7 @@ export const api = {
   reviewFile: (key, fileId) => rpc('hb_review_file', { p_key: key, p_file: fileId }),
   reviewImport: (key, id, slot, file, parsed, actor) => rpc('hb_review_import', { p_key: key, p_review: id, p_slot: slot, p_file: file, p_parsed: parsed, p_actor: actor || '' }),
   reviewSetRef: (key, id, row, value, src, actor) => rpc('hb_review_set_ref', { p_key: key, p_review: id, p_row: row, p_value: value, p_src: src || '', p_actor: actor || '' }),
+  reviewSetValue: (key, id, row, slot, value, note, actor) => rpc('hb_review_set_value', { p_key: key, p_review: id, p_row: row, p_slot: slot, p_value: value, p_note: note || '', p_actor: actor || '' }),
   reviewMark: (key, id, row, verdict, comment, actor) => rpc('hb_review_mark', { p_key: key, p_review: id, p_row: row, p_verdict: verdict, p_comment: comment || '', p_actor: actor || '' }),
   reviewStatus: (key, id, status, note, actor) => rpc('hb_review_status', { p_key: key, p_review: id, p_status: status, p_note: note || {}, p_actor: actor || '' }),
   reviewNewRound: (key, id, actor) => rpc('hb_review_new_round', { p_key: key, p_review: id, p_actor: actor || '' }),
