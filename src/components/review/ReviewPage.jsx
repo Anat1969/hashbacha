@@ -8,7 +8,7 @@ import { reviewLetterRequest } from '../../lib/mailRequests.js';
 import { formatStamp } from '../Notes.jsx';
 import { ease } from '../ui.jsx';
 import { ReviewPill } from './ReviewPill.jsx';
-import { readAuthor, ResearchLink } from './ReviewTab.jsx';
+import { readAuthor } from './ReviewTab.jsx';
 
 const MAX_FILE = 2 * 1024 * 1024;
 const CLS_PILL = { good: 'pill-green', bad: 'pill-red', none: 'pill-none' };
@@ -233,7 +233,6 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
                 ))}
               </div>
             )}
-            <ResearchLink ctx={ctx} />
             <label className="inline-field">
               <span className="label">שם הבודק</span>
               <input className="input input-author" value={author} placeholder="שם" aria-label="שם הבודק" onChange={(e) => setAuthor(e.target.value)} />
