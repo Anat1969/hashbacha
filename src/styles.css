@@ -742,3 +742,8 @@ a.project-name:hover { text-decoration: underline; text-underline-offset: 3px; }
   .detail-tabs { display: flex; }
   .detail-tabs a { flex: 1; text-align: center; }
 }
+.review-facts { margin: 14px 0 0; }
+.review-facts dd { margin: 0; }
+.review-slot.is-drag .mail-card { border-color: var(--ink); box-shadow: var(--shadow-2); transform: translateY(-2px); }
+.ft-dot-review { border-color: var(--ink-3); background: var(--ink-3); }
+.ft-review::before { border-color: var(--ink-3); background: var(--ink-3); }

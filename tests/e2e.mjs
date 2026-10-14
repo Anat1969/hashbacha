@@ -48,7 +48,8 @@ function handle(name, p) {
         me: { role: db.role },
         reviews: db.reviews.filter((r) => !r.superseded_by).map((r) => ({
           _id: r._id, project_id: r.project_id, opinion_id: r.opinion_id, round: r.round, status: r.status, updated_at: r.updated_at,
-          ok: Object.values(r.marks).filter((m) => m.verdict === 'ok').length, no: Object.values(r.marks).filter((m) => m.verdict === 'no').length
+          ok: Object.values(r.marks).filter((m) => m.verdict === 'ok').length, no: Object.values(r.marks).filter((m) => m.verdict === 'no').length,
+          events: r.events.filter((e) => ['open', 'import', 'letter_sent', 'approve'].includes(e.kind))
         }))
       }
     };
@@ -110,6 +111,7 @@ function reviewRpc(name, p) {
       ev(rv, 'import', { slot: p.p_slot, file: p.p_file?.name }); return { body: rv.status };
     }
     case 'hb_review_set_ref': rv.params[p.p_row] = { ...(rv.params[p.p_row] || {}), N: p.p_value, src: p.p_src }; ev(rv, 'ref', { row: p.p_row, N: p.p_value }); return { body: null };
+    case 'hb_review_set_value': rv.params[p.p_row] = { ...(rv.params[p.p_row] || {}), [p.p_slot]: p.p_value }; ev(rv, 'ref', { row: p.p_row, slot: p.p_slot, value: p.p_value }); return { body: rv.status };
     case 'hb_review_mark':
       rv.marks[p.p_row] = { verdict: p.p_verdict, comment: p.p_comment, reviewer: p.p_actor, marked_at: new Date().toISOString() };
       if (['waiting_for_reports', 'reports_imported', 'revised_report_received'].includes(rv.status)) rv.status = 'in_review';
@@ -379,9 +381,11 @@ try {
   await page.locator('.contact-row').last().locator('input[aria-label="שם איש קשר"]').fill('אייל דנינו');
   await page.locator('.contact-row').last().locator('select').selectOption('שמאי יזם');
   await page.locator('.contact-row').last().locator('input[aria-label="מייל איש קשר"]').fill('eyal@example.org');
+  await page.fill('.modal input[placeholder^="https://claude.ai"]', 'https://claude.ai/project/research-test');
   await page.click('.modal-actions button:has-text("שמור")');
   await page.waitForSelector('.modal', { state: 'detached' });
   ok(lastCall('hb_save_settings').params.p_settings.contacts.some((c) => c.name === 'אייל דנינו' && c.role === 'שמאי יזם'), 'contact saved');
+  ok(lastCall('hb_save_settings').params.p_settings.researchUrl === 'https://claude.ai/project/research-test', 'Claude research project link saved');
 
   console.log('Analytics');
   await page.click('.nav-link:has-text("ניתוח")');
@@ -564,11 +568,16 @@ try {
   await page.waitForSelector('tr[data-row="r5"] button.mark-no.on');
   ok(lastCall('hb_review_mark').params.p_comment === 'נדרש מקור לעסקאות', '✗ sends the comment');
   ok(await page.isVisible('.detail-badges .pill:has-text("בבדיקה")'), 'status: in review after first mark');
-  await page.click('button:has-text("עריכת ערכי ייחוס")');
+  await page.click('button:has-text("עריכת נתונים")');
+  await page.fill('input[aria-label="עירייה שיעור היוון"]', '6.25');
   await page.fill('input[aria-label="מקור רווח יזמי"]', 'נוהג שוק 2026');
-  await page.click('.editbar button:has-text("שמור ערכי ייחוס")');
+  await page.click('.editbar button:has-text("שמור נתונים")');
   await page.waitForSelector('.editbar', { state: 'detached' });
   ok(lastCall('hb_review_set_ref').params.p_row === 'r18' && lastCall('hb_review_set_ref').params.p_src === 'נוהג שוק 2026', 'reference edit saves row + source');
+  ok(lastCall('hb_review_set_value').params.p_row === 'r20' && lastCall('hb_review_set_value').params.p_slot === 'M' && lastCall('hb_review_set_value').params.p_value === 6.25, 'manual correction of the city report value');
+  ok((await page.getAttribute('a:has-text("הורדת תבנית ריקה")', 'href')) === '/templates/template.xlsx', 'blank template download link');
+  ok((await page.getAttribute('a:has-text("פרויקט המחקר ב־Claude")', 'href')) === 'https://claude.ai/project/research-test', 'button opens the Claude research project');
+  ok((await page.textContent('.review-facts')).includes('שמאי היזם (בדוי)'), 'appraiser names from the imported files');
   ok(await page.isDisabled('button:has-text("אישור הבקרה")'), 'approve disabled until all 22 rows are ✓');
   await page.screenshot({ path: `${SHOTS}/r2-review-compare.png`, fullPage: true });
   await page.click('button:has-text("מכתב הוראות (1)")');
@@ -585,9 +594,30 @@ try {
   await page.waitForSelector('.detail-badges .pill:has-text("הוראות נשלחו")');
   ok(lastCall('hb_review_status').params.p_status === 'instructions_sent', 'mark sent → instructions_sent');
   ok(await page.isVisible('.file-timeline >> text=מכתב הוראות סומן כנשלח'), 'review log shows the letter');
+  await page.click('.detail-tabs a:has-text("פרויקט ומעקב")');
+  await page.waitForSelector('.ft-key:has-text("בקרת שומה")');
+  ok(await page.isVisible('.file-timeline >> text=נשלח מכתב הוראות'), 'project timeline includes review events');
+  console.log('Review: approve and update the opinion');
+  await page.click('.detail-tabs a:has-text("שומות השבחה")');
+  await page.click('.review-card a:has-text("פתיחת ההשוואה")');
+  await page.waitForSelector('.table-review');
+  for (let i = 1; i <= 22; i++) {
+    const btn = page.locator(`tr[data-row="r${i}"] button.mark-ok`);
+    if (!(await btn.evaluate((el) => el.classList.contains('on')))) { await btn.click(); await page.waitForSelector(`tr[data-row="r${i}"] button.mark-ok.on`); }
+  }
+  await page.click('button:has-text("אישור הבקרה")');
+  await page.click('[data-testid=confirm-yes]');
+  await page.waitForSelector('.detail-badges .pill:has-text("אושר")');
+  ok(lastCall('hb_review_approve').params.p_review, 'approve sent when all 22 rows are ✓');
+  await page.click('button:has-text("עדכון רווחיות בחוות הדעת")');
+  await page.click('[data-testid=confirm-yes]');
+  await page.waitForTimeout(400);
+  const upd = lastCall('hb_upsert_opinion').params.p_data;
+  ok(/%$/.test(upd['רווחיות יזם (%)']) && /%$/.test(upd['רווחיות עירייה (%)']), `opinion updated from r18: ${upd['רווחיות יזם (%)']} / ${upd['רווחיות עירייה (%)']}`);
+  ok(await page.locator('tr[data-row="r1"] button.mark-ok').isDisabled(), 'approved review is locked');
   await page.goto(`${BASE}/#/`);
   await page.waitForSelector('.table-projects .row');
-  ok(await page.isVisible('.table-projects .pill:has-text("הוראות נשלחו")'), 'list badge shows the review status');
+  ok(await page.isVisible('.table-projects .pill:has-text("אושר")'), 'list badge shows the review status');
 
   // ===== Mobile =====
   console.log('\nMobile 390');
