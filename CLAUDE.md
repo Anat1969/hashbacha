@@ -9,6 +9,12 @@
 - Chart.js for analytics, SheetJS (xlsx) for Excel import/export (lazy-loaded).
 - Deployed on Vercel from GitHub (project `hashbacha`). `vercel.json` sets Vite build + SPA rewrite.
 
+## Access (user feedback, 2026-10-14)
+
+- Never hand over a bare code with no instructions. Deliver a one-click entry link: `https://hashbacha-roan.vercel.app/?k=CODE`. The app stores the code and strips it from the URL.
+- The gate screen explains how to get in; Settings shows a copyable entry link for sharing with the team.
+- Vercel's production branch is `main`, not the repo default branch: after merging, deploy production manually (`create_deployment` with `target: production`).
+
 ## Testing
 
 `npm run build && npm test` — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.

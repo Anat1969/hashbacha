@@ -321,6 +321,19 @@ try {
   await page.reload();
   await page.waitForSelector('.gate-card');
   ok(true, 'invalid stored code returns to gate');
+  ok(await page.isVisible('.gate-help >> text=קישור הכניסה האישי'), 'gate explains how to get in');
+
+  console.log('Entry link');
+  await page.goto(`${BASE}/?k=${KEY.toLowerCase()}#/a`);
+  await page.waitForSelector('.analysis-card');
+  ok(!page.url().includes('k='), 'code removed from address bar');
+  ok(await page.evaluate((k) => localStorage.getItem('hashbacha-access-key') === k, KEY), 'entry link stores the code');
+  ok(lastCall('hb_load').params.p_key === KEY, 'entry link loads data with the code');
+  await page.click('button:has-text("הגדרות")');
+  const share = await page.inputValue('input[aria-label="קישור כניסה"]');
+  ok(share === `${BASE}/?k=${encodeURIComponent(KEY)}`, `settings shows share link ${share}`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.modal', { state: 'detached' });
 
   // ===== Mobile =====
   console.log('\nMobile 390');

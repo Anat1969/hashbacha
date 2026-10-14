@@ -414,3 +414,11 @@ textarea.input { resize: vertical; min-height: 64px; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Entry help & share link */
+.gate-help { border-top: 1px solid var(--line); padding-top: 14px; }
+.gate-help ol { margin: 8px 0 0; padding: 0 18px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--ink-2); }
+.share { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.share .hint { margin: 4px 0 10px; }
+.share-row { display: flex; gap: 8px; }
+.share-row .input { font-size: 12px; min-width: 0; }
