@@ -33,7 +33,8 @@ export function ChromeBanner() {
 }
 
 // In Chrome: install as an app, so the desktop/taskbar icon always opens here.
-export function InstallButton({ className = 'btn btn-ghost' }) {
+// withStatus: in Settings, always say something (installed / how to install / open in Chrome) instead of disappearing.
+export function InstallButton({ className = 'btn btn-ghost', withStatus = false }) {
   const [ready, setReady] = useState(!!window.__hbInstall);
   const [installed, setInstalled] = useState(isInstalled());
   useEffect(() => {
@@ -43,7 +44,16 @@ export function InstallButton({ className = 'btn btn-ghost' }) {
     window.addEventListener('appinstalled', done);
     return () => { window.removeEventListener('hb-installable', on); window.removeEventListener('appinstalled', done); };
   }, []);
-  if (installed || !ready || !isChrome()) return null;
+  if (installed || !ready || !isChrome()) {
+    if (!withStatus) return null;
+    return (
+      <span className="hint install-status">
+        {installed ? 'האפליקציה מותקנת במחשב הזה. פותחים אותה מהסמל בשולחן העבודה או בשורת המשימות.'
+          : !isChrome() ? 'ההתקנה זמינה רק בכרום. פתחי את האפליקציה בכרום, וכפתור ההתקנה יופיע כאן.'
+          : 'אם כפתור ההתקנה לא מופיע: בכרום, תפריט שלוש הנקודות, "העברה, שמירה ושיתוף" ואז "התקנת דף כאפליקציה".'}
+      </span>
+    );
+  }
   return (
     <button className={className} onClick={async () => { const e = window.__hbInstall; if (!e) return; e.prompt(); const r = await e.userChoice; if (r.outcome === 'accepted') setInstalled(true); }}>
       התקנה כאפליקציה בכרום

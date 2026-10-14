@@ -9,10 +9,11 @@ import ProjectDetail from './components/ProjectDetail.jsx';
 import Analytics from './components/Analytics.jsx';
 import ActivityView from './components/ActivityView.jsx';
 import ReviewsView from './components/review/ReviewsView.jsx';
+import Guide from './components/Guide.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import MailComposer from './components/MailComposer.jsx';
-import { ChromeBanner, CLAUDE_CODE_URL, InstallButton } from './components/ChromeBar.jsx';
+import { ChromeBanner } from './components/ChromeBar.jsx';
 
 // An entry link (?k=CODE) signs in with one click; the code is then removed from the address bar.
 function readKey() {
@@ -36,6 +37,7 @@ function parseRoute() {
   if (a === 'a') return { view: 'analytics', tab: b || null };
   if (a === 'log') return { view: 'activity' };
   if (a === 's') return { view: 'reviews' };
+  if (a === 'guide') return { view: 'guide' };
   return { view: 'projects' };
 }
 
@@ -47,7 +49,8 @@ const NAV = [
   { path: '#/', view: 'projects', label: 'פרויקטים' },
   { path: '#/s', view: 'reviews', label: 'בקרת שומות' },
   { path: '#/a', view: 'analytics', label: 'ניתוח' },
-  { path: '#/log', view: 'activity', label: 'יומן' }
+  { path: '#/log', view: 'activity', label: 'יומן' },
+  { path: '#/guide', view: 'guide', label: 'מדריך' }
 ];
 
 export default function App() {
@@ -127,6 +130,16 @@ export default function App() {
     role: data?.me?.role || 'editor'
   }), [data, mutate, query, toast, confirm, busy, load, key]);
 
+  // The guide is public: it explains the app before anyone has a code.
+  if (!key && route.view === 'guide') {
+    return (
+      <div className="app">
+        <div className="backdrop" aria-hidden="true"><div className="grid-plane" /><div className="glow glow-a" /><div className="glow glow-b" /></div>
+        <main className="main"><Guide standalone /></main>
+      </div>
+    );
+  }
+
   if (!key) {
     return (
       <>
@@ -179,8 +192,6 @@ export default function App() {
               {ctx.role === 'reviewer' ? 'הרשאת בודק' : 'צפייה בלבד'}
             </span>
           )}
-          <InstallButton />
-          <a className="btn btn-ghost btn-claude" href={CLAUDE_CODE_URL} target="_blank" rel="noreferrer" title="פתיחת שיחת הפיתוח ב־Claude Code להמשך עריכה ושדרוג">עריכה ושדרוג ב־Claude</a>
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)}>הגדרות</button>
         </div>
       </header>
@@ -210,6 +221,7 @@ export default function App() {
               {route.view === 'analytics' && <Analytics ctx={ctx} tab={route.tab} />}
               {route.view === 'activity' && <ActivityView ctx={ctx} />}
               {route.view === 'reviews' && <ReviewsView ctx={ctx} />}
+              {route.view === 'guide' && <Guide />}
             </motion.div>
           </AnimatePresence>
         )}

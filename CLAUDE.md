@@ -18,8 +18,9 @@
 
 ## Chrome (user requirement, repeated 2026-10-14)
 
-- The user wants the app always in Google Chrome. A page cannot pick its browser, so: the app is an installable PWA (`public/manifest.webmanifest`, `public/sw.js`, install button in the header and Settings); outside Chrome a banner names the current browser and offers Android intent / iOS `googlechromes://` links or a Windows `.cmd` / Mac `.command` launcher (`src/lib/browser.js`). Never answer this with "not possible" alone.
-- Header has a "עריכה ושדרוג ב־Claude" button linking to the Claude Code session.
+- The user wants the app always in Google Chrome. A page cannot pick its browser, so: the app is an installable PWA (`public/manifest.webmanifest`, `public/sw.js`, install button in Settings only, with an install how-to when the prompt is unavailable); outside Chrome a banner names the current browser and offers Android intent / iOS `googlechromes://` links or a Windows `.cmd` / Mac `.command` launcher (`src/lib/browser.js`). Never answer this with "not possible" alone.
+- "עריכה ושדרוג ב־Claude" (Claude Code session) and "התקנה כאפליקציה בכרום" live in Settings, not in the page header (user feedback 2026-10-14).
+- User guide / landing page: "מדריך" in the main menu (`#/guide`, `src/components/Guide.jsx`), public without a code via a link on the entry screen. Keep it in sync when flows change.
 - Every link handed to the user in chat comes in Chrome form too (user feedback, 2026-10-14, third time): Windows `chrome "URL"` (Win+R), Mac `open -a "Google Chrome" "URL"`, Android `intent://HOST/PATH#Intent;scheme=https;package=com.android.chrome;end`, iPhone `googlechromes://HOST/PATH`. Never a bare https link alone.
 
 ## Notes, mail, contacts
@@ -38,7 +39,7 @@
 
 ## Testing
 
-`npm run build && npm test` (24 logic checks + 171 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (24 logic checks + 186 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 Mocks must return exactly the shape the SQL function returns (2026-10-14: `hb_review_get` returned `id` while the mock returned `_id`, so every review write failed live). The mock answers 404 PGRST202 when a required RPC parameter is missing.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 

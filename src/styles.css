@@ -756,3 +756,25 @@ a.project-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .import-summary { width: 100%; margin: 4px 0; }
 @media (max-width: 860px) { .table-review td.col-ref { box-shadow: none; border-radius: 10px; } }
 .mail-confirm { flex-basis: 100%; font-size: 14px; color: var(--ink-2); }
+
+/* ---------- Guide (landing page / user manual) ---------- */
+.guide-toc { margin-top: 0; }
+.guide-toc .mono { color: var(--ink-3); font-size: 11.5px; }
+.guide-section { scroll-margin-top: 90px; }
+.guide-card { padding: 18px 20px; border-radius: 14px; border: 1px solid var(--line); background: linear-gradient(170deg, #fff, #fafaf7); box-shadow: var(--shadow-1); }
+.guide-big { margin: 8px 0 0; font-size: clamp(17px, 1.6vw, 21px); font-weight: 300; line-height: 1.5; color: var(--ink); }
+.guide-lead { max-width: 75ch; margin-bottom: 12px; }
+.guide-enter { margin-top: 18px; }
+.guide-flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 860px) { .guide-flow { grid-template-columns: 1fr; } }
+.guide-step { cursor: default; gap: 6px; }
+.guide-step:hover { transform: none; }
+.guide-step .opinion-num { align-self: flex-start; margin-bottom: 4px; }
+.guide-list { margin: 8px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.guide-list div { padding: 10px 12px; border-radius: 10px; background: rgba(28,29,32,0.035); }
+.guide-list dt { font-weight: 600; color: var(--ink); font-size: 15px; }
+.guide-list dd { margin: 2px 0 0; color: var(--ink-2); font-size: 14.5px; }
+.guide-table { margin: 14px 0; }
+.guide-status { margin-bottom: 12px; }
+.guide .insights li { font-size: 15px; }
+.install-status { flex-basis: 100%; }
