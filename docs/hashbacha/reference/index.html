@@ -1,0 +1,475 @@
+<title>השוואת שומות השבחה</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=IBM+Plex+Sans+Hebrew:wght@400;500;600&display=swap">
+<style>
+/* פריסה: כרטיס פרויקט בראש, פס סיכום, ואז טבלת ספר-חשבונות: יזם | נייטרלי (מודגש במרכז) | עירייה | בדיקה */
+:root{
+  --paper:#f4f6f9; --surface:#ffffff; --ink:#15233f; --muted:#5a6476; --line:#d8dde6;
+  --band:#e9eef7; --accent:#1d3866; --accent-ink:#ffffff;
+  --good:#17704a; --good-bg:#e1f2e9; --bad:#ad2b22; --bad-bg:#fbe5e2; --none:#8a93a3;
+  --f-display:"Frank Ruhl Libre","Times New Roman",serif;
+  --f-body:"IBM Plex Sans Hebrew","Arial Hebrew",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0f131b; --surface:#161c27; --ink:#e6ebf3; --muted:#9aa4b5; --line:#2a3342;
+  --band:#1b2436; --accent:#9db8ea; --accent-ink:#0f131b;
+  --good:#63c792; --good-bg:#14301f; --bad:#f2897e; --bad-bg:#3b1b19; --none:#7d8696; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0f131b; --surface:#161c27; --ink:#e6ebf3; --muted:#9aa4b5; --line:#2a3342;
+  --band:#1b2436; --accent:#9db8ea; --accent-ink:#0f131b;
+  --good:#63c792; --good-bg:#14301f; --bad:#f2897e; --bad-bg:#3b1b19; --none:#7d8696; color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;direction:rtl}
+.wrap{max-width:1280px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+h1,h2{font-family:var(--f-display);font-weight:700;margin:0;text-wrap:balance}
+h1{font-size:clamp(1.6rem,3.4vw,2.2rem);line-height:1.15}
+h2{font-size:1.15rem}
+.eyebrow{font-size:.78rem;letter-spacing:.06em;color:var(--muted);font-weight:500}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 14px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select,input,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 10px;min-width:0}
+.top{display:flex;flex-wrap:wrap;gap:16px;align-items:end;justify-content:space-between}
+.top .pick{display:grid;gap:4px;min-width:0}
+.top .actions{display:flex;flex-wrap:wrap;gap:8px}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 24px;padding-block:16px;border-block:1px solid var(--line)}
+.meta div{display:grid;gap:2px;min-width:0}
+.meta span{color:var(--muted);font-size:.8rem}
+.meta b{font-weight:500}
+.banner{background:var(--band);border-radius:6px;padding:10px 14px;font-size:.88rem}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.sum{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:6px}
+.sum.mid{background:var(--band)}
+.sum .row{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums}
+.sum .big{font-family:var(--f-display);font-size:1.5rem;font-weight:700}
+.g{color:var(--good)} .r{color:var(--bad)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.84rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-inline-end:6px;vertical-align:middle}
+.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:1060px;font-variant-numeric:tabular-nums}
+th,td{padding:10px 12px;text-align:right;vertical-align:top;border-bottom:1px solid var(--line)}
+thead th{font-size:.8rem;font-weight:600;color:var(--muted);background:var(--surface);position:sticky;top:0}
+thead th small{display:block;font-weight:400}
+th.mid,td.mid{background:var(--band);border-inline:1px solid var(--line)}
+tr.ch td{background:var(--paper);font-family:var(--f-display);font-weight:700;font-size:.98rem;padding-block:8px}
+td.param b{font-weight:600;display:block}
+td.param span{color:var(--muted);font-size:.8rem}
+.val{font-weight:600;font-size:1rem}
+.cell{display:grid;gap:4px;padding:6px 8px;border-radius:6px;min-width:150px}
+.cell.good{background:var(--good-bg)} .cell.bad{background:var(--bad-bg)}
+.chip{font-size:.74rem;font-weight:600;letter-spacing:.02em;justify-self:start;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
+.good .chip{color:var(--good)} .bad .chip{color:var(--bad)} .none .chip{color:var(--none)}
+.dev{font-size:.8rem;color:var(--muted)}
+.scale{position:relative;height:8px;direction:ltr;margin-top:2px}
+.scale .trk{position:absolute;inset:3px 0;background:var(--line);border-radius:2px}
+.scale .band{position:absolute;top:2px;bottom:2px;left:25%;right:25%;background:var(--good);opacity:.28;border-radius:2px}
+.scale .ctr{position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--ink)}
+.scale .dot{position:absolute;top:0;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--ink)}
+.bad .scale .dot{background:var(--bad)} .good .scale .dot{background:var(--good)}
+.src{font-size:.78rem;color:var(--muted)}
+.tol{font-size:.84rem;white-space:nowrap}
+.rev{display:grid;gap:6px;min-width:220px}
+.rev .btns{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.rev button{padding:3px 12px;font-size:1rem;line-height:1.4}
+.rev button[aria-pressed="true"].ok{background:var(--good);color:var(--surface);border-color:var(--good)}
+.rev button[aria-pressed="true"].no{background:var(--bad);color:var(--surface);border-color:var(--bad)}
+.rev textarea{width:100%;min-height:52px;resize:vertical;font-size:.86rem}
+.rev .when{font-size:.76rem;color:var(--muted)}
+.rev .save{font-size:.8rem;padding:3px 10px}
+td input{width:100%;min-width:90px}
+.levy{display:flex;flex-wrap:wrap;gap:8px 28px;font-size:.92rem;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.levy b{font-variant-numeric:tabular-nums}
+.newform{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px}
+.newform label{display:grid;gap:4px;font-size:.84rem;color:var(--muted)}
+.newform .act{display:flex;gap:8px;align-items:end}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:28px;text-align:center;color:var(--muted)}
+.upl{cursor:pointer;border:1px solid var(--accent);color:var(--accent);background:var(--surface);border-radius:6px;padding:7px 14px}
+.upl{position:relative}.upl input{position:absolute;opacity:0;width:1px;height:1px;overflow:hidden}
+.upl:hover{background:var(--band)}
+.upl:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.import{background:var(--surface);border:1px solid var(--line);border-inline-start:4px solid var(--accent);border-radius:6px;padding:12px 16px;display:grid;gap:6px;font-size:.9rem}
+.import ul{margin:0;padding-inline-start:18px;color:var(--muted)}
+.import .x{justify-self:start;font-size:.8rem;padding:3px 10px}
+.note{font-size:.78rem;color:var(--muted);line-height:1.35}
+body.drag .wrap{outline:2px dashed var(--accent);outline-offset:-8px}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:calc(16px + env(safe-area-inset-left,0px));background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:6px;font-size:.88rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="pick">
+      <span class="eyebrow">אגף השבחה · בקרת שומות פינוי בינוי</span>
+      <h1 id="title">השוואת שומות השבחה</h1>
+    </div>
+    <div class="actions">
+      <select id="projectSel" aria-label="בחירת פרויקט"></select>
+      <label class="upl" id="uplLbl"><input type="file" id="fileIn" accept=".xlsx,.xls,.csv">העלאת דוח שמאי</label>
+      <button id="editBtn">עריכת נתונים</button>
+      <button id="newBtn">פרויקט חדש</button>
+    </div>
+  </header>
+
+  <form id="newForm" class="newform" hidden>
+    <label>שם הפרויקט<input id="nfName" required></label>
+    <label>מיקום<input id="nfLoc"></label>
+    <label>תכנית משביחה<input id="nfPlan"></label>
+    <label>שמאי היזם<input id="nfDev"></label>
+    <label>שמאי העירייה<input id="nfMun"></label>
+    <div class="act"><button class="primary" type="submit">יצירה</button><button type="button" id="nfCancel">ביטול</button></div>
+  </form>
+
+  <div id="banner" class="banner" hidden></div>
+  <div id="importMsg" class="import" hidden></div>
+  <div id="main"></div>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const CH =["זיהוי ומסגרת","מצב קודם","מצב חדש – זכויות","מצב חדש – ערכים","עלויות","מקדמים","תוצאה"];
+// מבנה 22 הפרמטרים: type num/match/min, tolType rel/abs
+const TEMPLATE = [
+ ["r1",0,"מועד קובע","תאריך","match","abs",0],
+ ["r2",0,"גישת שומה","טקסט","match","abs",0],
+ ["r3",0,"שיעור היטל","%","num","abs",0],
+ ["r4",1,"שטח בנוי קיים","מ\"ר","num","rel",0.02],
+ ["r5",1,"שווי דירה קיימת","₪/מ\"ר","num","rel",0.08],
+ ["r6",1,"פוטנציאל תמ\"א 38 / חלופה","מ\"ר אקו'","num","rel",0.30],
+ ["r7",1,"שווי קרקע לפוטנציאל","₪/מ\"ר אקו'","num","rel",0.15],
+ ["r8",2,"יח\"ד בתכנית","יח\"ד","num","abs",0],
+ ["r9",2,"שטח אקוויוולנטי כולל","מ\"ר","num","rel",0.03],
+ ["r10",2,"שטח דירת תמורה ממוצע","מ\"ר","num","rel",0.05],
+ ["r11",3,"מחיר מכירה דירה חדשה","₪/מ\"ר אקו'","num","rel",0.07],
+ ["r12",3,"מספר עסקאות השוואה","עסקאות","min","abs",0],
+ ["r13",4,"בנייה ישירה","₪/מ\"ר ברוטו","num","rel",0.10],
+ ["r14",4,"עלויות עקיפות","% מהישירות","num","abs",4],
+ ["r15",4,"שכר דירה לדיירים","חודשים","num","abs",6],
+ ["r16",4,"מטלות ציבוריות","₪ מיליון","num","rel",0.15],
+ ["r17",4,"מימון","% מהעלויות","num","abs",1.5],
+ ["r18",4,"רווח יזמי","%","num","abs",3],
+ ["r19",5,"תקופת דחייה עד מימוש","שנים","num","abs",1],
+ ["r20",5,"שיעור היוון","%","num","abs",1],
+ ["r21",6,"שווי מצב חדש","₪ מיליון","num","rel",0.10],
+ ["r22",6,"השבחה","₪ מיליון","num","rel",0.20]
+].map(([id,ch,label,unit,type,tolType,tol])=>({id,ch,label,unit,type,tolType,tol,N:"",D:"",M:"",src:""}));
+
+// פרויקט לדוגמה בנתונים בדויים – מוצג רק כשאין חיבור לאחסון
+const SAMPLE = {id:"sample-dekel",name:"מתחם רחוב הדקל (דוגמה)",location:"אשדוד – נתונים בדויים",plan:"תכנית לדוגמה 603-0000000",dev:"שמאי היזם (בדוי)",mun:"שמאי הוועדה (בדוי)",sample:true,
+ rows:TEMPLATE.map(r=>({...r}))};
+(()=>{const v={
+ r1:["12.03.2025","12.03.2025","12.03.2025","פרסום אישור התכנית ברשומות"],
+ r2:["כלכלית + בקרת השוואה","כלכלית","כלכלית + בקרת השוואה","החייב יזם; הלכת אשדר"],
+ r3:[25,25,25,"ברירת מחדל בפינוי בינוי; לאמת החלטת מועצה"],
+ r4:[4800,4800,4760,"היתרים ומדידה"],
+ r5:[19500,21000,19000,"עסקאות 24 חודשים במתחם ובסביבתו"],
+ r6:[1600,2400,1200,"זכויות בתוקף במועד הקובע"],
+ r7:[6000,6500,5500,"שיטת שארית"],
+ r8:[256,256,256,"הוראות התכנית"],
+ r9:[27800,27000,28100,"הוראות התכנית ומקדמים מקובלים"],
+ r10:[100,104,98,"הסכם פינוי בינוי"],
+ r11:[27500,26200,29500,"עסקאות בפרויקטים חדשים בעיר"],
+ r12:[8,4,11,"סף מזערי"],
+ r13:[7800,8600,6900,"מחירון דקל"],
+ r14:[18,24,16,"נוהג מקובל"],
+ r15:[36,42,33,"לוח זמנים לביצוע"],
+ r16:[14,16.5,13,"נספח מטלות ואומדן מהנדס"],
+ r17:[5,6.5,3.2,"נוהג בליווי בנקאי"],
+ r18:[18,23,14,"נוהג שוק; תקן 21.1 כבקרה"],
+ r19:[2,3.5,1.5,"לוח זמנים ריאלי"],
+ r20:[6,7,5.5,"ריבית חסרת סיכון + פרמיה"],
+ r21:[168,142,181,"תחשיב הבודק"],
+ r22:[64.8,25.6,83.2,"תחשיב הבודק"]};
+ SAMPLE.rows.forEach(r=>{const x=v[r.id];r.N=x[0];r.D=x[1];r.M=x[2];r.src=x[3];});})();
+
+const $=s=>document.querySelector(s);
+const state={db:null,user:null,uid:null,canWrite:true,projects:new Map(),cur:null,reviews:new Map(),editing:false,unsubRev:null,offline:false};
+
+const num=v=>{if(v===""||v==null)return NaN;return Number(String(v).replace(/,/g,"").trim());};
+const fmt=v=>{const n=num(v);return isFinite(n)?n.toLocaleString("he-IL",{maximumFractionDigits:2}):String(v);};
+const norm=v=>String(v??"").replace(/\s+/g," ").trim();
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>{const d=new Date();return d.toISOString().slice(0,10);};
+const heDate=iso=>iso?iso.split("-").reverse().join("."):"";
+function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2400);}
+
+function tolText(r){
+  if(r.type==="match")return "זהות מלאה";
+  if(r.type==="min")return "לפחות "+fmt(r.N);
+  if(r.tolType==="rel")return "±"+(r.tol*100).toLocaleString("he-IL",{maximumFractionDigits:1})+"%";
+  return r.tol===0?"זהות מלאה":"±"+fmt(r.tol)+(r.unit.startsWith("%")?" נק'":" "+r.unit);
+}
+function assess(r,v){
+  if(v===""||v==null)return {state:"missing"};
+  if(r.N===""||r.N==null)return {state:"noref"};
+  if(r.type==="match"){const ok=norm(v)===norm(r.N);return {state:ok?"in":"out",dist:ok?0:1,txt:ok?"תואם לייחוס":"לא תואם לייחוס"};}
+  const n=num(v),N=num(r.N);
+  if(!isFinite(n)||!isFinite(N))return {state:"missing"};
+  if(r.type==="min"){const ok=n>=N;return {state:ok?"in":"out",dist:Math.max(0,N-n),txt:ok?"עומד בסף":"חסרות "+fmt(N-n)};}
+  const d=r.tolType==="rel"?(N===0?0:(n-N)/N):n-N;
+  const ok=Math.abs(d)<=r.tol+1e-9;
+  const sign=d>0?"+":d<0?"−":"";
+  const txt=r.tolType==="rel"?sign+Math.abs(d*100).toLocaleString("he-IL",{maximumFractionDigits:1})+"% מהייחוס"
+    :(d===0?"זהה לייחוס":sign+fmt(Math.abs(d))+(r.unit.startsWith("%")?" נק'":" "+r.unit)+" מהייחוס");
+  const pos=r.tol>0?50+Math.max(-1,Math.min(1,d/(2*r.tol)))*50:null;
+  return {state:ok?"in":"out",dist:Math.abs(d),txt,pos};
+}
+// כללי הסימון: קבילות קודם, קרבה אחר כך
+function compare(r){
+  const a=assess(r,r.D),b=assess(r,r.M);
+  const res={D:{...a,cls:"none",label:""},M:{...b,cls:"none",label:""}};
+  const lab=s=>s.state==="missing"?"חסר":s.state==="noref"?"אין ייחוס":"";
+  res.D.label=lab(a);res.M.label=lab(b);
+  const okA=a.state==="in",okB=b.state==="in",has=s=>s.state==="in"||s.state==="out";
+  if(has(a)&&has(b)){
+    if(okA&&okB){
+      if(Math.abs(a.dist-b.dist)<1e-9){res.D.cls=res.M.cls="good";res.D.label=res.M.label="קרוב באותה מידה";}
+      else{const aw=a.dist<b.dist;res.D.cls=aw?"good":"bad";res.M.cls=aw?"bad":"good";
+        res.D.label=aw?"קרוב יותר":"רחוק יותר";res.M.label=aw?"רחוק יותר":"קרוב יותר";}
+    }else if(okA||okB){
+      res.D.cls=okA?"good":"bad";res.M.cls=okB?"good":"bad";
+      res.D.label=okA?"בטווח":"חריגה";res.M.label=okB?"בטווח":"חריגה";
+    }else{
+      res.D.cls=res.M.cls="bad";
+      const aw=a.dist<b.dist-1e-9,bw=b.dist<a.dist-1e-9;
+      res.D.label="חריגה"+(aw?" · קרובה יותר":"");res.M.label="חריגה"+(bw?" · קרובה יותר":"");
+    }
+  }else{
+    if(has(a)){res.D.cls=okA?"good":"bad";res.D.label=okA?"בטווח":"חריגה";}
+    if(has(b)){res.M.cls=okB?"good":"bad";res.M.label=okB?"בטווח":"חריגה";}
+  }
+  return res;
+}
+
+function sideCell(r,s,key){
+  const v=r[key];
+  const scale=s.pos!=null?`<div class="scale" aria-hidden="true"><div class="trk"></div><div class="band"></div><div class="ctr"></div><div class="dot" style="left:${s.pos}%"></div></div>`:"";
+  return `<div class="cell ${s.cls}"><span class="val">${v===""?"—":esc(fmt(v))}</span>${s.label?`<span class="chip">${esc(s.label)}</span>`:""}${s.txt?`<span class="dev">${esc(s.txt)}</span>`:""}${scale}${r[key+"note"]?`<span class="note">${esc(r[key+"note"])}</span>`:""}</div>`;
+}
+function editInput(r,key){return `<input id="in-${r.id}-${key}" data-row="${r.id}" data-key="${key}" value="${esc(r[key])}" aria-label="${esc(r.label)} ${key}">`;}
+
+function reviewCell(r){
+  const rv=state.reviews.get(r.id)||{};
+  const ro=!state.canWrite;
+  return `<div class="rev" data-rev="${r.id}">
+    <div class="btns">
+      <button class="ok" data-v="ok" aria-pressed="${rv.verdict==="ok"}" aria-label="אישור" ${ro?"disabled":""}>✓</button>
+      <button class="no" data-v="no" aria-pressed="${rv.verdict==="no"}" aria-label="דחייה" ${ro?"disabled":""}>✗</button>
+      <span class="when">${rv.date?"עודכן "+heDate(rv.date):"טרם נבדק"}</span>
+    </div>
+    <textarea id="c-${r.id}" placeholder="הערה" ${ro?"readonly":""}>${esc(rv.comment||"")}</textarea>
+    ${ro?"":`<button class="save" data-save="1">שמירת הערה</button>`}
+  </div>`;
+}
+
+function currentProject(){return state.projects.get(state.cur);}
+
+function render(){
+  const sel=$("#projectSel");
+  const list=[...state.projects.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),"he"));
+  sel.innerHTML=list.map(p=>`<option value="${esc(p.id)}" ${p.id===state.cur?"selected":""}>${esc(p.name)}</option>`).join("");
+  sel.hidden=list.length===0;
+  $("#editBtn").hidden=!state.canWrite||!currentProject();
+  $("#newBtn").hidden=!state.canWrite;
+  $("#uplLbl").hidden=!state.canWrite||!currentProject();
+  $("#editBtn").textContent=state.editing?"שמירת שינויים":"עריכת נתונים";
+  $("#editBtn").classList.toggle("primary",state.editing);
+  const p=currentProject();
+  const main=$("#main");
+  if(!p&&!state.loaded){main.innerHTML=`<div class="empty">טוען פרויקטים…</div>`;return;}
+  if(!p){main.innerHTML=`<div class="empty">עדיין אין פרויקטים. לחצו "פרויקט חדש" והזינו את שתי השומות ואת ערכי הייחוס.</div>`;$("#title").textContent="השוואת שומות השבחה";return;}
+  $("#title").textContent=p.name;
+  const cmp=p.rows.map(r=>({r,c:compare(r)}));
+  const cnt=k=>({g:cmp.filter(x=>x.c[k].cls==="good").length,x:cmp.filter(x=>x.c[k].label.startsWith("חריגה")).length});
+  const cd=cnt("D"),cm=cnt("M");
+  const meta=state.editing?`
+    <div><span>שם הפרויקט</span><input id="m-name" value="${esc(p.name)}"></div>
+    <div><span>מיקום</span><input id="m-location" value="${esc(p.location)}"></div>
+    <div><span>תכנית משביחה</span><input id="m-plan" value="${esc(p.plan)}"></div>
+    <div><span>שמאי היזם</span><input id="m-dev" value="${esc(p.dev)}"></div>
+    <div><span>שמאי העירייה</span><input id="m-mun" value="${esc(p.mun)}"></div>`:`
+    <div><span>מיקום</span><b>${esc(p.location||"—")}</b></div>
+    <div><span>תכנית משביחה</span><b>${esc(p.plan||"—")}</b></div>
+    <div><span>שמאי היזם</span><b>${esc(p.dev||"—")}</b></div>
+    <div><span>שמאי העירייה</span><b>${esc(p.mun||"—")}</b></div>`;
+  const rowsById=Object.fromEntries(p.rows.map(r=>[r.id,r]));
+  const levy=k=>{const b=num(rowsById.r22?.[k]),t=num(rowsById.r3?.[k]);return isFinite(b)&&isFinite(t)?fmt(Math.round(b*t)/100)+" ₪ מיליון":"—";};
+  let body="",lastCh=-1;
+  for(const {r,c} of cmp){
+    if(r.ch!==lastCh){lastCh=r.ch;body+=`<tr class="ch"><td colspan="6">${esc(CH[r.ch])}</td></tr>`;}
+    body+=`<tr>
+      <td class="param"><b>${esc(r.label)}</b><span>${esc(r.unit)}</span></td>
+      <td>${state.editing?editInput(r,"D"):sideCell(r,c.D,"D")}</td>
+      <td class="mid">${state.editing?editInput(r,"N")+`<input id="in-${r.id}-src" data-row="${r.id}" data-key="src" value="${esc(r.src)}" placeholder="מקור" style="margin-top:6px">`:`<div class="val">${r.N===""?"—":esc(fmt(r.N))}</div><div class="src">${esc(r.src||"ללא מקור")}</div>`}</td>
+      <td>${state.editing?editInput(r,"M"):sideCell(r,c.M,"M")}</td>
+      <td class="tol">${esc(tolText(r))}</td>
+      <td>${reviewCell(r)}</td></tr>`;
+  }
+  main.innerHTML=`
+   <section class="meta">${meta}</section>
+   <section class="summary" aria-label="סיכום">
+     <div class="sum"><span class="eyebrow">שמאי היזם</span><div class="row"><span>קרוב לייחוס</span><span class="big g">${cd.g}</span></div><div class="row"><span>חריגות</span><span class="r">${cd.x}</span></div></div>
+     <div class="sum mid"><span class="eyebrow">בדיקת אילנית</span><div class="row" id="revSum"></div><div class="row"><span>פרמטרים</span><span>${p.rows.length}</span></div></div>
+     <div class="sum"><span class="eyebrow">שמאי העירייה</span><div class="row"><span>קרוב לייחוס</span><span class="big g">${cm.g}</span></div><div class="row"><span>חריגות</span><span class="r">${cm.x}</span></div></div>
+   </section>
+   <div class="levy"><span>היטל נגזר (השבחה × שיעור):</span><span>יזם <b>${levy("D")}</b></span><span>ייחוס <b>${levy("N")}</b></span><span>עירייה <b>${levy("M")}</b></span></div>
+   <div class="legend"><span><i style="background:var(--good)"></i>קרוב יותר לייחוס ובטווח</span><span><i style="background:var(--bad)"></i>רחוק יותר או חריגה מהטווח</span><span>הסרגל: הנקודה מול הייחוס; הפס הירוק הוא הטווח הקביל</span></div>
+   <div class="tablebox"><table>
+     <thead><tr><th>פרמטר</th><th>שמאי היזם</th><th class="mid">עמודה נייטרלית<small>ערך ייחוס ומקור</small></th><th>שמאי העירייה</th><th>טווח קביל</th><th>בדיקת אילנית<small>✓ / ✗, הערה ותאריך</small></th></tr></thead>
+     <tbody>${body}</tbody></table></div>`;
+  updateRevSummary();
+}
+function updateRevSummary(){
+  const el=$("#revSum");if(!el)return;const p=currentProject();if(!p)return;
+  let ok=0,no=0;p.rows.forEach(r=>{const v=state.reviews.get(r.id)?.verdict;if(v==="ok")ok++;else if(v==="no")no++;});
+  el.innerHTML=`<span>אושרו <b class="g">${ok}</b></span><span>נדחו <b class="r">${no}</b></span><span>ממתינים <b>${p.rows.length-ok-no}</b></span>`;
+}
+function refreshReviewCells(){
+  document.querySelectorAll("[data-rev]").forEach(box=>{
+    const id=box.dataset.rev,rv=state.reviews.get(id)||{};
+    box.querySelector(".ok").setAttribute("aria-pressed",rv.verdict==="ok");
+    box.querySelector(".no").setAttribute("aria-pressed",rv.verdict==="no");
+    box.querySelector(".when").textContent=rv.date?"עודכן "+heDate(rv.date):"טרם נבדק";
+    const ta=box.querySelector("textarea");
+    if(document.activeElement!==ta&&!ta.dataset.dirty)ta.value=rv.comment||"";
+  });
+  updateRevSummary();
+}
+
+const writing=new Set();
+async function saveReview(rowId,patch){
+  const p=currentProject();if(!p)return;
+  const prev=state.reviews.get(rowId)||{};
+  const next={pid:p.id,rowId,verdict:prev.verdict||null,comment:prev.comment||"",...patch,date:today(),by:state.uid||null};
+  state.reviews.set(rowId,next);refreshReviewCells();
+  if(state.offline||!state.db){toast("נשמר בתצוגה בלבד");return;}
+  const key=p.id+"__"+rowId;
+  if(writing.has(key)){toast("שמירה קודמת עדיין בתהליך");return;}
+  writing.add(key);
+  try{await state.db.collection("reviews").doc(key).set(next);toast("נשמר");}
+  catch(e){toast(e?.code==="invalid_argument"?"אין הרשאת כתיבה":"השמירה נכשלה, נסו שוב");if(e?.code==="invalid_argument"){state.canWrite=false;render();}}
+  finally{writing.delete(key);}
+}
+
+$("#main").addEventListener("click",e=>{
+  const box=e.target.closest("[data-rev]");if(!box)return;
+  const id=box.dataset.rev;
+  const vb=e.target.closest("button[data-v]");
+  if(vb){const cur=state.reviews.get(id)?.verdict;const ta=box.querySelector("textarea");
+    saveReview(id,{verdict:cur===vb.dataset.v?null:vb.dataset.v,comment:ta.value});ta.dataset.dirty="";return;}
+  if(e.target.closest("button[data-save]")){const ta=box.querySelector("textarea");saveReview(id,{comment:ta.value});ta.dataset.dirty="";}
+});
+$("#main").addEventListener("input",e=>{if(e.target.matches(".rev textarea"))e.target.dataset.dirty="1";});
+
+$("#projectSel").addEventListener("change",e=>{state.cur=e.target.value;state.editing=false;subscribeReviews();render();});
+
+$("#editBtn").addEventListener("click",async()=>{
+  const p=currentProject();if(!p)return;
+  if(!state.editing){state.editing=true;render();return;}
+  const np={...p,rows:p.rows.map(r=>({...r}))};
+  ["name","location","plan","dev","mun"].forEach(k=>{const el=$("#m-"+k);if(el)np[k]=el.value.trim();});
+  document.querySelectorAll("td input[data-row]").forEach(inp=>{
+    const r=np.rows.find(x=>x.id===inp.dataset.row);const raw=inp.value.trim();const k=inp.dataset.key;
+    r[k]=(k!=="src"&&r.type!=="match"&&raw!==""&&isFinite(num(raw)))?num(raw):raw;
+  });
+  state.editing=false;state.projects.set(np.id,np);render();
+  if(state.db&&!state.offline){try{const {id,...body}=np;await state.db.collection("projects").doc(id).set(body);toast("הנתונים נשמרו");}catch(e){toast("השמירה נכשלה");}}
+});
+
+$("#newBtn").addEventListener("click",()=>{$("#newForm").hidden=false;$("#nfName").focus();});
+$("#nfCancel").addEventListener("click",()=>{$("#newForm").hidden=true;});
+$("#newForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const body={name:$("#nfName").value.trim(),location:$("#nfLoc").value.trim(),plan:$("#nfPlan").value.trim(),dev:$("#nfDev").value.trim(),mun:$("#nfMun").value.trim(),rows:TEMPLATE.map(r=>({...r})),created:today()};
+  if(!body.name)return;
+  let id="p"+Date.now().toString(36);
+  if(state.db&&!state.offline){try{const ref=state.db.collection("projects").doc();id=ref.id;await ref.set(body);}catch(err){toast("היצירה נכשלה");return;}}
+  state.projects.set(id,{id,...body});state.cur=id;state.editing=true;
+  $("#newForm").reset();$("#newForm").hidden=true;subscribeReviews();render();
+});
+
+// קליטת דוח בתבנית האחידה: שורות מטא (סוג דוח, שם השמאי...) ושורת כותרות שמתחילה ב"קוד"
+const KIND={"יזם":"D","עירייה":"M","ייחוס":"N"};
+const KIND_NAME={D:"שמאי היזם",M:"שמאי העירייה",N:"עמודת הייחוס"};
+function parseReport(rows){
+  const meta={};let hi=-1;
+  rows.forEach((r,i)=>{const k=norm(r[0]);if(hi<0&&k==="קוד")hi=i;else if(hi<0&&k&&r[1]!=null)meta[k]=norm(r[1]);});
+  if(hi<0)throw new Error("לא נמצאה שורת כותרות שמתחילה ב'קוד'. השתמשו בתבנית האחידה.");
+  const head=rows[hi].map(norm);const ci=n=>head.indexOf(n);
+  const cv=ci("ערך"),cs=ci("מקור / הסבר");
+  if(cv<0)throw new Error("חסרה עמודת 'ערך' בשורת הכותרות.");
+  const vals={};
+  for(const r of rows.slice(hi+1)){const code=norm(r[0]).toLowerCase();if(/^r\d+$/.test(code))vals[code]={v:r[cv],note:cs>=0?norm(r[cs]):""};}
+  return {meta,vals};
+}
+async function importFile(file){
+  const box=$("#importMsg");
+  try{
+    if(typeof XLSX==="undefined")throw new Error("רכיב קריאת האקסל לא נטען. רעננו את הדף ונסו שוב.");
+    const p=currentProject();if(!p)throw new Error("בחרו או צרו פרויקט לפני העלאת דוח.");
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    const {meta,vals}=parseReport(rows);
+    const key=KIND[meta["סוג דוח"]];
+    if(!key)throw new Error("בתא 'סוג דוח' צריך להופיע: יזם, עירייה או ייחוס.");
+    const warn=[];let filled=0;
+    const np={...p,rows:p.rows.map(r=>({...r}))};
+    for(const r of np.rows){
+      const x=vals[r.id];
+      if(!x||x.v==null||norm(x.v)===""){warn.push(`${r.label}: חסר ערך`);r[key]="";continue;}
+      if(r.type!=="match"){const n=num(x.v);if(!isFinite(n)){warn.push(`${r.label}: "${norm(x.v)}" אינו מספר`);r[key]="";continue;}r[key]=n;}
+      else r[key]=norm(x.v);
+      if(key==="N")r.src=x.note||r.src;else{r[key+"note"]=x.note;if(!x.note)warn.push(`${r.label}: ללא מקור או הסבר`);}
+      filled++;
+    }
+    if(key==="D"&&meta["שם השמאי"])np.dev=meta["שם השמאי"];
+    if(key==="M"&&meta["שם השמאי"])np.mun=meta["שם השמאי"];
+    np[key+"File"]={name:file.name,date:meta["תאריך השומה"]||"",imported:today()};
+    if(meta["שם הפרויקט"]&&norm(meta["שם הפרויקט"])!==norm(p.name))warn.unshift(`שם הפרויקט בקובץ ("${meta["שם הפרויקט"]}") שונה מהפרויקט שנבחר. ודאו שהקובץ שייך לפרויקט הזה.`);
+    state.projects.set(np.id,np);state.editing=false;render();
+    if(state.db&&!state.offline){const {id,...body}=np;await state.db.collection("projects").doc(id).set(body);}
+    box.hidden=false;
+    box.innerHTML=`<b>${esc(KIND_NAME[key])} נקלט מהקובץ ${esc(file.name)}: ${filled} מתוך ${np.rows.length} שדות הוזנו.</b>${warn.length?`<span>${warn.length} הערות לבדיקה:</span><ul>${warn.map(w=>`<li>${esc(w)}</li>`).join("")}</ul>`:"<span>כל השדות הוזנו עם מקור.</span>"}<button class="x" type="button">סגירה</button>`;
+  }catch(e){
+    box.hidden=false;box.innerHTML=`<b>הקובץ לא נקלט.</b><span>${esc(e.message||"שגיאה בקריאת הקובץ")}</span><button class="x" type="button">סגירה</button>`;
+  }
+}
+$("#importMsg").addEventListener("click",e=>{if(e.target.closest(".x"))$("#importMsg").hidden=true;});
+$("#fileIn").addEventListener("change",e=>{const f=e.target.files[0];if(f)importFile(f);e.target.value="";});
+document.addEventListener("dragover",e=>{if(!state.canWrite)return;e.preventDefault();document.body.classList.add("drag");});
+document.addEventListener("dragleave",e=>{if(!e.relatedTarget)document.body.classList.remove("drag");});
+document.addEventListener("drop",e=>{e.preventDefault();document.body.classList.remove("drag");const f=e.dataTransfer?.files?.[0];if(f&&state.canWrite)importFile(f);});
+
+function subscribeReviews(){
+  if(state.unsubRev){state.unsubRev();state.unsubRev=null;}
+  state.reviews=new Map();
+  if(!state.db||state.offline||!state.cur)return;
+  state.unsubRev=state.db.collection("reviews").where("pid","==",state.cur).onSnapshot(snap=>{
+    const m=new Map();snap.docs.forEach(d=>{const x=d.data();if(x&&x.rowId)m.set(x.rowId,x);});
+    state.reviews=m;refreshReviewCells();
+  },()=>{});
+}
+
+function goOffline(msg){
+  state.offline=true;state.loaded=true;
+  state.projects=new Map([[SAMPLE.id,SAMPLE]]);state.cur=SAMPLE.id;
+  const b=$("#banner");b.hidden=false;b.textContent=msg;render();
+}
+
+render();
+(async()=>{
+  const db=await window.claude?.use?.("db");
+  if(!db){goOffline("מצב תצוגה: מוצג פרויקט לדוגמה בנתונים בדויים. סימונים והערות לא נשמרים בחלון זה.");return;}
+  state.db=db;
+  const user=await window.claude.use("user");
+  if(user){state.uid=await user.id();const c=await user.can("data.write");if(c===false)state.canWrite=false;}
+  db.collection("projects").onSnapshot(snap=>{
+    const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));
+    state.projects=m;state.loaded=true;
+    if(!state.cur||!m.has(state.cur)){state.cur=m.has(SAMPLE.id)?SAMPLE.id:(m.keys().next().value||null);subscribeReviews();}
+    if(!state.editing)render();
+  },e=>{if(e?.code==="revoked")goOffline("הגישה לנתונים בוטלה. מוצג פרויקט לדוגמה.");});
+})();
+</script>
