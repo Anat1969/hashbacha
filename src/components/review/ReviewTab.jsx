@@ -31,9 +31,6 @@ function ReviewList({ ctx, entry }) {
           <span className="label">שומת שמאי היזם מול שומת שמאי העירייה · השוואה לעמודת ייחוס</span>
           <h2 className="display-s">בקרת שומות השבחה</h2>
         </div>
-        <div className="panel-actions">
-          <ResearchLink ctx={ctx} />
-        </div>
       </div>
       <p className="hint">
         לכל חוות דעת נפתחת בקרה נפרדת. בבקרה קולטים את שני הדוחות בתבנית האחידה, קובעים ערך ייחוס עם מקור לכל אחד מ־22 הפרמטרים,
@@ -80,11 +77,4 @@ function ReviewList({ ctx, entry }) {
       {!canWrite && <p className="hint">לקוד הכניסה הזה יש הרשאת צפייה בלבד.</p>}
     </section>
   );
-}
-
-// Opens the Claude project where the review rules were researched (link set in Settings).
-export function ResearchLink({ ctx }) {
-  const url = (ctx.data.settings || {}).researchUrl;
-  if (!url) return <span className="hint">קישור לפרויקט המחקר ב־Claude נשמר בהגדרות</span>;
-  return <a className="btn btn-ghost" href={url} target="_blank" rel="noreferrer">פרויקט המחקר ב־Claude</a>;
 }

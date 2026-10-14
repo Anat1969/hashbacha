@@ -73,11 +73,16 @@ export default function SettingsModal({ open, onClose, ctx, onLogout }) {
 
       <section className="settings-block">
         <h3 className="settings-title">פרויקט המחקר ב־Claude</h3>
-        <p className="hint">הקישור לשיחה או לפרויקט ב־Claude שבו נעשו המחקר והכללים של בקרת השומות. בלשונית "בקרת שומות" ובעמוד ההשוואה יש כפתור שפותח אותו.</p>
+        <p className="hint">הקישור לשיחה או לפרויקט ב־Claude שבו נעשו המחקר והכללים של בקרת השומות. נשמר כאן בלבד.</p>
         <Field label="קישור לפרויקט ב־Claude">
           <input className="input" dir="ltr" type="url" value={form.researchUrl || ''} placeholder="https://claude.ai/..."
             onChange={(e) => setForm({ ...form, researchUrl: e.target.value })} />
         </Field>
+        {form.researchUrl && (
+          <div className="settings-row">
+            <a className="btn btn-ghost" href={form.researchUrl} target="_blank" rel="noreferrer">פתיחת פרויקט המחקר ב־Claude</a>
+          </div>
+        )}
       </section>
 
       <section className="settings-block">
