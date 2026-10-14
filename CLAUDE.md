@@ -68,3 +68,11 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 
 - `claude/unclear-description-myfrxh` — repository default branch
 - `gh-pages` — v1 on GitHub Pages
+
+## Appraisal review module
+- Before any work on this module, read docs/hashbacha/rules.md, docs/hashbacha/plan.md and docs/hashbacha/progress.md (if they exist).
+- After finishing a step, append to docs/hashbacha/progress.md: date, what was built, files changed, what is left.
+- Design: all new screens must look exactly like the existing app: same components, layout shell, navigation, colors, fonts, spacing, buttons, tables, forms, badges and empty states. Reuse existing components and tokens; never create a new style when an equivalent exists.
+- docs/hashbacha/reference/index.html is a reference for LOGIC ONLY (parsing, scoring, data structure). Ignore its CSS, fonts, colors and layout.
+- Status colors (green = closer / in range, red = farther / exceedance) come from the app's existing success and danger tokens.
+- Hebrew, RTL, no icons.
