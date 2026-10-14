@@ -19,7 +19,7 @@ const EVENT_TEXT = {
   mark: (d) => `${d.row}: ${d.verdict === 'ok' ? '✓ אושר' : d.verdict === 'no' ? '✗ נדחה' : 'הסימון בוטל'}${d.comment ? ` · ${d.comment}` : ''}`,
   status: (d) => `סטטוס: ${REVIEW_STATUS[d.to]?.label || d.to}`,
   letter_draft: (d) => `נפתחה טיוטת מכתב הוראות${d.via ? ` (${d.via})` : ''}`,
-  letter_sent: (d) => `מכתב הוראות סומן כנשלח${d.rows ? ` · ${d.rows} שורות` : ''}${d.to ? ` · אל ${d.to}` : ''}`,
+  letter_sent: (d) => `מכתב הוראות נשלח${d.rows ? ` · ${d.rows} שורות` : ''}${d.to ? ` · אל ${d.to}` : ''}${d.via === 'outside' ? ' · מחוץ לאפליקציה' : d.via ? ` · ${d.via}` : ''}`,
   round_open: (d) => `נפתח סבב ${d.round}`,
   approve: () => 'הבדיקה אושרה'
 };
@@ -42,7 +42,6 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
   const [refDraft, setRefDraft] = useState({});
   const [importMsg, setImportMsg] = useState(null);
   const [author, setAuthor] = useState(readAuthor);
-  const [letterOpened, setLetterOpened] = useState(false);
   const fileRef = useRef(null);
   const slotRef = useRef('D');
 
@@ -180,18 +179,20 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
     }));
     ctx.openMail(reviewLetterRequest({
       p, opinion, review, rows: letterRows, settings: ctx.data.settings || {},
+      // Called only after the user confirmed in the composer that the letter really went out.
       onSent: async (via, draft) => {
-        setLetterOpened({ to: draft.to, rows: letterRows.length });
-        await ctx.mutate((k) => api.reviewStatus(k, review._id, 'letter_draft', { via, to: draft.to, rows: letterRows.length }, who()));
-        await load();
+        const note = { via, to: draft.to, rows: letterRows.length, date: new Date().toISOString().slice(0, 10) };
+        await act((k) => api.reviewStatus(k, review._id, 'instructions_sent', note, who()), 'מכתב ההוראות סומן כנשלח');
       }
     }));
   }
 
+  // For a letter sent outside the app (e.g. printed or from another mailbox).
   async function markSent() {
-    const note = { to: letterOpened?.to || '', rows: rejected.length, date: new Date().toISOString().slice(0, 10) };
-    const res = await act((k) => api.reviewStatus(k, review._id, 'instructions_sent', note, who()), 'סומן: מכתב ההוראות נשלח');
-    if (res !== null) setLetterOpened(false);
+    const ok = await ctx.confirm(`לסמן שמכתב ההוראות על ${rejected.length} שורות ✗ נשלח מחוץ לאפליקציה?`, 'סימון כנשלח');
+    if (!ok) return;
+    const note = { via: 'outside', rows: rejected.length, date: new Date().toISOString().slice(0, 10) };
+    await act((k) => api.reviewStatus(k, review._id, 'instructions_sent', note, who()), 'סומן: מכתב ההוראות נשלח');
   }
 
   async function newRound() {
@@ -337,7 +338,7 @@ export default function ReviewPage({ ctx, entry, reviewId }) {
           <div className="panel-actions">
             {canWrite && !refEdit && <button className="btn btn-ghost" onClick={startRef}>עריכת נתונים</button>}
             <button className="btn btn-ghost" onClick={openLetter} disabled={!rejected.length || !canWrite}>מכתב הוראות ({rejected.length})</button>
-            {letterOpened && canWrite && <button className="btn btn-primary" onClick={markSent}>סימון: המכתב נשלח</button>}
+            {rejected.length > 0 && canWrite && review.status === 'in_review' && <button className="btn btn-ghost btn-quiet" onClick={markSent}>נשלח מחוץ לאפליקציה</button>}
             {review.status === 'instructions_sent' && canWrite && <button className="btn btn-ghost" onClick={newRound}>סבב חדש לדוח מתוקן</button>}
             {approved && opinion && ctx.role === 'editor' && <button className="btn btn-ghost" onClick={updateOpinion}>עדכון רווחיות בחוות הדעת</button>}
             {!approved && <button className="btn btn-primary" onClick={approve} disabled={!canWrite || sum.ok !== 22}>אישור הבקרה</button>}

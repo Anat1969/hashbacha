@@ -755,3 +755,4 @@ a.project-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .review-slot-ref .mail-card { background: linear-gradient(170deg, #f4f4f0, #ecece7); }
 .import-summary { width: 100%; margin: 4px 0; }
 @media (max-width: 860px) { .table-review td.col-ref { box-shadow: none; border-radius: 10px; } }
+.mail-confirm { flex-basis: 100%; font-size: 14px; color: var(--ink-2); }

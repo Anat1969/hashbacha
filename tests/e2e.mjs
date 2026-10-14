@@ -151,8 +151,9 @@ const exe = existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '
 const browser = await chromium.launch({ executablePath: exe });
 
 async function newPage(viewport) {
-  const context = await browser.newContext({ viewport, locale: 'he-IL', acceptDownloads: true });
+  const context = await browser.newContext({ viewport, locale: 'he-IL', acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage();
+  context.on('page', (p) => { if (p !== page) p.close().catch(() => {}); }); // compose windows opened by the app
   page.on('pageerror', (e) => { failures++; console.log('  ✗ page error: ' + e.message); });
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await page.route('**/rest/v1/rpc/**', async (route) => {
@@ -211,7 +212,12 @@ try {
   ok(gmail.startsWith('https://mail.google.com/mail/?view=cm') && gmail.includes('saul%40example.org'), 'Gmail compose link carries the edited draft');
   await page.screenshot({ path: `${SHOTS}/03-mail.png` });
   await page.evaluate(() => { document.querySelectorAll('.modal a[target=_blank]').forEach((a) => a.removeAttribute('href')); });
+  const notesBefore = countCalls('hb_upsert_note');
   await page.click('.modal a:has-text("Gmail")');
+  await page.waitForSelector('.mail-confirm');
+  ok(countCalls('hb_upsert_note') === notesBefore, 'opening Gmail files nothing yet');
+  ok((await page.textContent('.mail-confirm')).includes('Gmail'), 'composer asks whether the mail was sent');
+  await page.click('.modal button:has-text("נשלח, לתייק")');
   await page.waitForSelector('.mail-form', { state: 'detached' });
   ok((lastCall('hb_save_settings')?.params.p_settings.contacts || []).some((c) => c.email === 'saul@example.org'), 'address saved to contacts');
   const sent = lastCall('hb_upsert_note').params.p_data;
@@ -335,6 +341,13 @@ try {
   await page.locator('.pick .check').filter({ hasText: 'מספר יחידות קיימות' }).locator('input').uncheck();
   ok(!(await page.inputValue('.mail-form textarea')).includes('מספר יחידות קיימות'), 'unchecking a field removes it from the draft');
   ok((await page.getAttribute('.modal a:has-text("Outlook")', 'href')).startsWith('https://outlook.office.com/mail/deeplink/compose'), 'Outlook web option');
+  const notesBefore2 = countCalls('hb_upsert_note');
+  await page.evaluate(() => { document.querySelectorAll('.modal a[target=_blank]').forEach((a) => a.removeAttribute('href')); });
+  await page.click('.modal a:has-text("Outlook")');
+  await page.waitForSelector('.mail-confirm');
+  await page.click('.modal button:has-text("לא נשלח, חזרה לעריכה")');
+  await page.waitForSelector('.modal a:has-text("Gmail")');
+  ok(countCalls('hb_upsert_note') === notesBefore2, '"לא נשלח" files nothing and returns to the draft');
   await page.click('.modal button:has-text("ביטול")');
   await page.waitForSelector('.mail-form', { state: 'detached' });
 
@@ -613,15 +626,21 @@ try {
   const letter = await page.inputValue('textarea[aria-label="תוכן המייל"]');
   ok(letter.includes('שווי דירה קיימת') && letter.includes('נדרש מקור לעסקאות'), 'letter lists the ✗ row with the comment');
   await page.screenshot({ path: `${SHOTS}/r3-letter.png` });
-  await page.evaluate(() => { document.querySelectorAll('.modal a[target=_blank]').forEach((a) => a.removeAttribute('href')); });
-  await page.click('.modal a:has-text("Gmail")');
-  await page.waitForSelector('button:has-text("סימון: המכתב נשלח")');
-  ok(lastCall('hb_review_status').params.p_status === 'letter_draft', 'opening the letter logs a draft');
-  ok(lastCall('hb_upsert_note').params.p_data.kind === 'mail_out', 'letter filed to the project as mail out');
-  await page.click('button:has-text("סימון: המכתב נשלח")');
+  const statusBefore = countCalls('hb_review_status');
+  const gmailHrefLetter = await page.getAttribute('.modal a:has-text("Gmail")', 'href');
+  const outlookHrefLetter = await page.getAttribute('.modal a:has-text("Outlook")', 'href');
+  ok(gmailHrefLetter.length <= 6000 && outlookHrefLetter.length <= 1500, `letter links fit the services (Gmail ${gmailHrefLetter.length}, Outlook ${outlookHrefLetter.length})`);
+  await page.click('.modal a:has-text("Outlook")');
+  await page.waitForSelector('.mail-confirm');
+  if (outlookHrefLetter.includes(encodeURIComponent('Ctrl+V'))) {
+    ok((await page.evaluate(() => navigator.clipboard.readText())) === letter, 'long letter: full text copied for pasting');
+  }
+  ok(countCalls('hb_review_status') === statusBefore, 'opening the letter does not mark it sent');
+  await page.click('.modal button:has-text("נשלח, לתייק")');
   await page.waitForSelector('.detail-badges .pill:has-text("הוראות נשלחו")');
-  ok(lastCall('hb_review_status').params.p_status === 'instructions_sent', 'mark sent → instructions_sent');
-  ok(await page.isVisible('.file-timeline >> text=מכתב הוראות סומן כנשלח'), 'review log shows the letter');
+  ok(lastCall('hb_review_status').params.p_status === 'instructions_sent' && lastCall('hb_review_status').params.p_note.via === 'outlook', 'confirmed letter → instructions_sent');
+  ok(lastCall('hb_upsert_note').params.p_data.kind === 'mail_out' && lastCall('hb_upsert_note').params.p_data.meta.via === 'outlook', 'letter filed as mail out only after confirmation');
+  ok(await page.isVisible('.file-timeline >> text=מכתב הוראות נשלח'), 'review log shows the letter');
   await page.click('.detail-tabs a:has-text("פרויקט ומעקב")');
   await page.waitForSelector('.ft-key:has-text("בקרת שומה")');
   ok(await page.isVisible('.file-timeline >> text=נשלח מכתב הוראות'), 'project timeline includes review events');

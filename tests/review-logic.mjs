@@ -64,5 +64,17 @@ const kinds = (k) => w.filter((x) => x.kind === k).length;
 ok(kinds('project') === 1 && kinds('nonnumeric') === 1 && kinds('nosource') === 1 && kinds('missing') === 19, `warning kinds: project / non-numeric / no source / missing (${Object.keys(WARN_KINDS).map((k) => k + '=' + kinds(k)).join(', ')})`);
 ok(parseReport(bad).slot === 'D' && parseReport([['קוד', 'ערך']]).slot === null, '"סוג דוח" routes the file; missing cell → no slot');
 
+// Mail links must fit Gmail / Outlook / mailto; a long letter goes through the clipboard.
+const { composeHref, LINK_LIMIT, PASTE_LINE } = await import('../src/lib/mail.js');
+const { reviewLetterRequest } = await import('../src/lib/mailRequests.js');
+const rows5 = PARAMS.slice(4, 9).map((r) => ({ chapter: 'מצב קודם', label: r.label, unit: r.unit, value: '21,000', ref: '19,500', src: 'עסקאות 24 חודשים במתחם ובסביבתו', deviation: '+7.7% מהייחוס', tol: '±8%', exceed: true, comment: 'נדרש מקור מפורט לעסקאות ההשוואה ולתאריכיהן' }));
+const letterDraft = reviewLetterRequest({ p: { _id: 'p', 'שם התכנית': 'פרויקט ענת', 'שם היזם': 'יזם' }, opinion: { 'שמאי מטעם היזם': 'שמאי', 'תאריך קבלת בקשה': '01/09/2026' }, review: { round: 1 }, rows: rows5, settings: {} }).build();
+for (const k of ['gmail', 'outlook', 'mailto']) {
+  const r = composeHref(k, letterDraft);
+  ok(r.href.length <= LINK_LIMIT[k] && r.trimmed && r.href.includes(encodeURIComponent(PASTE_LINE)), `5-row letter → ${k} link ${r.href.length} chars, body via clipboard`);
+}
+const short = composeHref('gmail', { to: 'a@b.c', subject: 'תזכורת', text: 'שלום, תזכורת קצרה.' });
+ok(!short.trimmed && short.href.includes(encodeURIComponent('תזכורת קצרה')), 'short mail keeps its full body in the link');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
