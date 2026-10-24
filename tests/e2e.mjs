@@ -7,7 +7,11 @@ import vm from 'node:vm';
 import { chromium } from 'playwright-core';
 
 const KEY = 'HB-TEST-TEST-TEST';
-const BASE = 'http://localhost:4173';
+const PORT = process.env.PORT || '4173';
+const BASE = `http://localhost:${PORT}`;
+// The A&I logo button comes from the portfolio app; AI_MENU_JS can point to a local copy.
+const aiMenu = (p) => process.env.AI_MENU_JS ? p.route('https://appofapp-gh.vercel.app/ai-menu.js', (r) => r.fulfill({ path: process.env.AI_MENU_JS, contentType: 'application/javascript' })) : null;
+const openSettings = async (p) => { await p.click('ai-menu .logo'); await p.locator('ai-menu .item', { hasText: 'הגדרות' }).click(); await p.waitForSelector('.modal'); };
 const SHOTS = 'tests/screens';
 mkdirSync(SHOTS, { recursive: true });
 
@@ -141,10 +145,10 @@ function ok(cond, msg) { if (cond) { passes++; console.log('  ✓ ' + msg); } el
 const lastCall = (name) => [...calls].reverse().find((c) => c.name === name);
 const countCalls = (name) => calls.filter((c) => c.name === name).length;
 
-const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', '4173', '--strictPort'], { stdio: 'pipe' });
+const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', PORT, '--strictPort'], { stdio: 'pipe' });
 await new Promise((res, rej) => {
   const t = setTimeout(() => rej(new Error('preview did not start')), 20000);
-  server.stdout.on('data', (d) => { if (String(d).includes('4173')) { clearTimeout(t); res(); } });
+  server.stdout.on('data', (d) => { if (String(d).includes(PORT)) { clearTimeout(t); res(); } });
 });
 
 const exe = existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined;
@@ -156,6 +160,7 @@ async function newPage(viewport) {
   context.on('page', (p) => { if (p !== page) p.close().catch(() => {}); }); // compose windows opened by the app
   page.on('pageerror', (e) => { failures++; console.log('  ✗ page error: ' + e.message); });
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await aiMenu(page);
   await page.route('**/rest/v1/rpc/**', async (route) => {
     const name = route.request().url().split('/rpc/')[1].split('?')[0];
     const params = route.request().postDataJSON() || {};
@@ -223,6 +228,8 @@ try {
   const sent = lastCall('hb_upsert_note').params.p_data;
   ok(sent.kind === 'mail_out' && sent.project_id && sent.meta.subject.startsWith('תזכורת') && sent.meta.to === 'saul@example.org', 'sent mail filed to the project with date, subject and recipient');
   ok((await page.locator('.topbar a.btn-claude, .topbar button:has-text("התקנה כאפליקציה")').count()) === 0, 'header has no install / Claude buttons');
+  ok(await page.locator('.topbar ai-menu .logo').isVisible(), 'A&I logo button in the top bar');
+  ok(!(await page.locator('header >> text=העתקת קישור').first().isVisible().catch(() => false)), 'no loose development buttons in the bar');
   ok(await page.evaluate(() => !!document.querySelector('link[rel=manifest]')), 'installable app manifest linked');
   ok(!(await page.isVisible('.chrome-banner')), 'no Chrome banner inside Chrome');
 
@@ -395,7 +402,7 @@ try {
   ok(lastCall('hb_remove_project').params.p_id === cardId, 'project deleted from its card');
 
   console.log('Settings');
-  await page.click('button:has-text("הגדרות")');
+  await openSettings(page);
   ok(await page.isVisible('.settings-block >> text=ממולאות בה אוטומטית'), 'settings explain what the fields do');
   await page.waitForSelector('.contact-row');
   ok((await page.locator('.contact-row input[aria-label="מייל איש קשר"]').first().inputValue()) === 'saul@example.org', 'saved contact listed');
@@ -408,8 +415,8 @@ try {
   await page.waitForSelector('.modal', { state: 'detached' });
   ok(lastCall('hb_save_settings').params.p_settings.contacts.some((c) => c.name === 'אייל דנינו' && c.role === 'שמאי יזם'), 'contact saved');
   ok(lastCall('hb_save_settings').params.p_settings.researchUrl === 'https://claude.ai/project/research-test', 'Claude research project link saved');
-  await page.click('button:has-text("הגדרות")');
-  ok(await page.isVisible('.modal a.btn-claude[href^="https://claude.ai/code/"]'), 'Settings: "עריכה ושדרוג ב־Claude"');
+  ok(/^https:\/\/claude\.ai\/code\//.test(await page.getAttribute('ai-menu', 'chat')) && (await page.getAttribute('ai-menu', 'research')) === 'https://claude.ai/project/research-test', 'A&I menu: dev chat and the saved research project');
+  await openSettings(page);
   ok((await page.locator('.modal .install-status, .modal button:has-text("התקנה כאפליקציה")').count()) === 1, 'Settings: install-in-Chrome button or how-to');
   ok((await page.getAttribute('.modal a:has-text("פתיחת פרויקט המחקר ב־Claude")', 'href')) === 'https://claude.ai/project/research-test', 'Settings opens the Claude research project');
   await page.keyboard.press('Escape');
@@ -524,7 +531,7 @@ try {
   await page.goto(`${BASE}/?k=${KEY.toLowerCase()}#/a`);
   await page.waitForSelector('.analysis-card');
   ok(!page.url().includes('k='), 'code removed from address bar');
-  await page.click('button:has-text("הגדרות")');
+  await openSettings(page);
   ok((await page.inputValue('input[aria-label="קישור כניסה"]')) === `${BASE}/?k=${encodeURIComponent(KEY)}`, 'settings shows share link');
   await page.keyboard.press('Escape');
   await page.waitForSelector('.modal', { state: 'detached' });
@@ -537,6 +544,7 @@ try {
   const edgeCtx = await browser.newContext({ viewport: { width: 1280, height: 800 }, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0' });
   const edge = await edgeCtx.newPage();
   await edge.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await aiMenu(edge);
   await edge.route('**/rest/v1/rpc/**', async (route) => { const name = route.request().url().split('/rpc/')[1]; const { status = 200, body } = handle(name, route.request().postDataJSON() || {}); await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }); });
   await edge.goto(`${BASE}/?k=${KEY}`);
   await edge.waitForSelector('.chrome-banner');
@@ -544,7 +552,7 @@ try {
   const [launcher] = await Promise.all([edge.waitForEvent('download'), edge.click('.chrome-banner button:has-text("קיצור דרך")')]);
   const lp = `${SHOTS}/launcher.cmd`;
   await launcher.saveAs(lp);
-  ok(readFileSync(lp, 'utf8').includes('start "" chrome "http://localhost:4173/?k=HB-TEST-TEST-TEST"'), 'Windows launcher opens the app in Chrome');
+  ok(readFileSync(lp, 'utf8').includes(`start "" chrome "${BASE}/?k=HB-TEST-TEST-TEST"`), 'Windows launcher opens the app in Chrome');
   await edgeCtx.close();
 
   console.log('Guide');
@@ -575,6 +583,7 @@ try {
   const anon = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'he-IL' });
   const ap = await anon.newPage();
   await ap.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await aiMenu(ap);
   await ap.goto(BASE);
   await ap.waitForSelector('.gate-card');
   await ap.click('.gate-help a:has-text("מדריך למשתמש")');
@@ -758,9 +767,9 @@ try {
     await noHorizontalScroll(m.page, path);
   }
   await m.page.screenshot({ path: `${SHOTS}/m3-log.png`, fullPage: true });
-  await m.page.click('button:has-text("הגדרות")');
+  await openSettings(m.page);
   await noHorizontalScroll(m.page, 'settings modal');
-  await m.page.click('button:has-text("יציאה מהמערכת")');
+  await m.page.click('.modal button:has-text("יציאה מהמערכת")');
   await m.page.waitForSelector('.gate-card');
   ok(await m.page.evaluate(() => !localStorage.getItem('hashbacha-access-key')), 'logout clears the code');
 } catch (e) {

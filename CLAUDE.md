@@ -88,3 +88,6 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 - The Claude research project link lives only in Settings (`hb_settings.data.researchUrl`, with an open button). Never put it on other pages (user feedback 2026-10-14).
 - Codes (2026-10-14): Anat Shtibelman, city architect = editor (existing code); Ilanit Zohar, betterment manager = reviewer; everyone else = one shared viewer code. Codes are only stored hashed; hand each person an entry link in Chrome form.
 - Roles per access code (`hb_access_keys.role`): editor (all), reviewer (review writes only), viewer (read). Viewer writes raise `hb_readonly` (toast, no logout).
+
+## A&I logo button
+The top bar holds only the app name (links home), content navigation, and ONE logo button "אד' ענת שטיבלמן A&I" (`<ai-menu>` from https://appofapp-gh.vercel.app/ai-menu.js). Every editing and development action (העתקת קישור, שיחת הפיתוח, פרויקט המחקר, התקנת האפליקציה, edit mode, add, delete) lives only inside it, never as loose buttons. Standard: https://github.com/Anat1969/AppOfApp-GH/blob/main/docs/ai-menu-standard.md
