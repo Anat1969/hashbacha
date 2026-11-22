@@ -1,4 +1,5 @@
 import { TML2023 } from './tml2023.js';
+import { CARDS } from './compare.js';
 
 export { SOURCES } from './tml2023.js';
 export const REPORTS = [TML2023];
@@ -7,11 +8,13 @@ export const findReport = (id) => REPORTS.find((r) => r.id === id) || null;
 // A report belongs to the project whose plan-number field holds one of its plan keys (punctuation ignored).
 const PLAN_FIELD = "מס' תכנית/ מס זמני";
 const squash = (x) => String(x || '').replace(/["'׳״/\\\s\-_.]/g, '');
+// Returns report cards (digital documents and comparison-only reports alike).
 export const reportsForProject = (project) => {
   const plan = squash(project?.[PLAN_FIELD]);
-  return plan ? REPORTS.filter((r) => (r.planKeys || []).some((k) => plan.includes(squash(k)))) : [];
+  return plan ? CARDS.filter((r) => r.planKeys.some((k) => plan.includes(squash(k)))) : [];
 };
-export const projectForReport = (report, projects = []) => projects.find((e) => reportsForProject(e.project).includes(report)) || null;
+export const projectForReport = (report, projects = []) => projects.find((e) => reportsForProject(e.project).some((c) => c.id === report.id)) || null;
+export const reportHref = (card) => (card.digital ? `#/d/${card.id}` : '#/d/compare');
 
 export const SIM_BASE = { price: 0, build: 0, months: 48, levy: 50 };
 

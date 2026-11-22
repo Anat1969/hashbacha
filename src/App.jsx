@@ -240,7 +240,7 @@ export default function App() {
               {route.view === 'guide' && <Guide tab={route.tab} />}
               {route.view === 'reports' && (route.id && findReport(route.id)
                 ? <ReportPage ctx={ctx} report={findReport(route.id)} tab={route.tab} />
-                : <ReportsView ctx={ctx} />)}
+                : <ReportsView ctx={ctx} compare={route.id === 'compare'} />)}
             </motion.div>
           </AnimatePresence>
         )}

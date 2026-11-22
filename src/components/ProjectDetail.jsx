@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { reportsForProject } from '../lib/reports/index.js';
+import { reportsForProject, reportHref } from '../lib/reports/index.js';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { OPINION_FIELDS, PROJECT_FIELDS, STATUS_OPTIONS } from '../lib/fields.js';
@@ -100,7 +100,7 @@ export default function ProjectDetail({ ctx, entry, tab, reviewId }) {
           <div className="detail-badges">
             <StatusPill value={p['סטטוס רמזור']} />
             {p['קישור'] && <a className="chip" href={p['קישור']} target="_blank" rel="noreferrer">קישור לתכנית</a>}
-            {reportsForProject(p).map((r) => <a key={r.id} className="chip report-chip" href={`#/d/${r.id}`}>דוח שמאי דיגיטלי · {r.written}</a>)}
+            {reportsForProject(p).map((r) => <a key={r.id} className="chip report-chip" href={reportHref(r)}>{r.digital ? 'דוח שמאי דיגיטלי' : 'דוח שמאי בהשוואה'} · {r.written}</a>)}
           </div>
         </div>
         <div className="detail-figures">
