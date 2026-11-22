@@ -780,3 +780,42 @@ a.project-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .guide-status { margin-bottom: 12px; }
 .guide .insights li { font-size: 15px; }
 .install-status { flex-basis: 100%; }
+
+/* Digital appraisal reports (#/d): reuses the guide layout; only the money bar, share bars and simulator are new. */
+.report-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+.report-card { text-decoration: none; gap: 8px; padding: 20px 22px; }
+.report-card-title { font-size: clamp(22px, 2.4vw, 30px) !important; font-weight: 300 !important; line-height: 1.15; }
+.report-card .chips { margin-top: 4px; }
+.report-card .pill { white-space: normal; }
+.report-open { align-self: flex-start; margin-top: 8px; color: #fff !important; font-size: 14px !important; }
+.report .back { margin-top: 18px; }
+.report-insight { margin: 14px 0; padding: 12px 16px; border-radius: 12px; border-inline-start: 4px solid var(--ink); background: rgba(28,29,32,0.045); font-size: 16px; color: var(--ink-2); }
+.report-insight .label { display: block; margin-bottom: 2px; }
+.report-insight b { color: var(--ink); }
+.report-gap { margin-top: 18px; }
+.report-gap-s { display: block; margin-top: 20px; }
+.report-tiles { margin-top: 16px; }
+.report-lever { margin-top: 8px; border-inline-start: 4px solid var(--ink); }
+.report-flow { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .report-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .report-flow { grid-template-columns: 1fr; } }
+.report-sources dt .pill { font-size: 13px; }
+.money-track { height: 34px; border-radius: 10px; }
+.money-track .seg { transition: width .4s; box-shadow: inset -1px 0 0 rgba(255,255,255,0.55); }
+.money .statusbar-legend { gap: 6px 16px; }
+.bar-share { display: inline-block; vertical-align: middle; width: min(120px, 30vw); height: 8px; border-radius: 8px; background: rgba(28,29,32,0.07); overflow: hidden; margin-inline-end: 6px; }
+.bar-share i { display: block; height: 100%; border-radius: 8px; background: var(--ink-2); }
+.bar-share i.is-levy { background: var(--amber); }
+.sim { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 22px; align-items: start; margin-top: 16px; }
+@media (max-width: 1100px) { .sim { grid-template-columns: 1fr; } }
+.sim-controls { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; border-radius: 14px; border: 1px solid var(--line); background: linear-gradient(170deg, #fff, #fafaf7); box-shadow: var(--shadow-1); }
+.sim-row { display: flex; flex-direction: column; gap: 5px; }
+.sim-label { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; color: var(--ink); }
+.sim-row input[type=range] { width: 100%; accent-color: var(--ink); direction: ltr; min-height: 28px; }
+.sim-controls .btn { align-self: flex-start; }
+.sim-out .summary { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); margin-top: 0; }
+.sim-row .seg-control { align-self: flex-start; }
+.sim-out .summary dd { font-size: 28px; }
+.sim-out .summary dd.neg { color: var(--red); }
+.sim-delta { margin: 0; font-size: 16px; color: var(--ink-2); }
+.sim-delta b { color: var(--ink); }

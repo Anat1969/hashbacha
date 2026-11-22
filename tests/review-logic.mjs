@@ -76,5 +76,15 @@ for (const k of ['gmail', 'outlook', 'mailto']) {
 const short = composeHref('gmail', { to: 'a@b.c', subject: 'תזכורת', text: 'שלום, תזכורת קצרה.' });
 ok(!short.trimmed && short.href.includes(encodeURIComponent('תזכורת קצרה')), 'short mail keeps its full body in the link');
 
+// Digital reports: the sensitivity model must reproduce the report's own bottom line.
+const { REPORTS, simulate, SIM_BASE, breakEvenPrice } = await import('../src/lib/reports/index.js');
+const rep = REPORTS[0];
+const b0 = simulate(SIM_BASE);
+ok(Math.round(b0.profit) === rep.result.profit && b0.onCost.toFixed(1) === '20.5' && b0.onSales.toFixed(1) === '17.0', `report model at base = report (${Math.round(b0.profit)}, ${b0.onCost.toFixed(1)}%, ${b0.onSales.toFixed(1)}%)`);
+ok(rep.costs.reduce((a, c) => a + c.sum, 0) - rep.costTotal === 102 && rep.revenue.reduce((a, c) => a + c[1], 0) === rep.revenueTotal, 'report data: revenue lines sum to the total; cost lines differ from the stated total by the report\'s own 102');
+ok(Math.abs(simulate({ ...SIM_BASE, price: breakEvenPrice() }).profit) < 1 && Math.round(breakEvenPrice()) === -18, 'break-even price drop is 18%');
+ok(Math.round(simulate({ ...SIM_BASE, levy: 0 }).profit - b0.profit) === 43900 && simulate({ ...SIM_BASE, build: 10 }).profit < b0.profit && simulate({ ...SIM_BASE, months: 60 }).profit < b0.profit, 'levy exemption adds 43,900; dearer or longer construction lowers profit');
+ok(rep.sales.reduce((a, x) => a + x[1], 0) === 422 && rep.sales.reduce((a, x) => a + x[5], 0) === 1031570, 'sales table: 422 developer units, 1,031,570 incl. VAT');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -10,6 +10,9 @@ import Analytics from './components/Analytics.jsx';
 import ActivityView from './components/ActivityView.jsx';
 import ReviewsView from './components/review/ReviewsView.jsx';
 import Guide from './components/Guide.jsx';
+import ReportsView from './components/reports/ReportsView.jsx';
+import ReportPage from './components/reports/ReportPage.jsx';
+import { findReport } from './lib/reports/index.js';
 import SettingsModal from './components/SettingsModal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import MailComposer from './components/MailComposer.jsx';
@@ -38,6 +41,7 @@ function parseRoute() {
   if (a === 'log') return { view: 'activity' };
   if (a === 's') return { view: 'reviews' };
   if (a === 'guide') return { view: 'guide', tab: b || null };
+  if (a === 'd') return { view: 'reports', id: b || null, tab: c || null };
   return { view: 'projects' };
 }
 
@@ -48,6 +52,7 @@ export function go(path) {
 const NAV = [
   { path: '#/', view: 'projects', label: 'פרויקטים' },
   { path: '#/s', view: 'reviews', label: 'בקרת שומות' },
+  { path: '#/d', view: 'reports', label: 'דוחות שמאות' },
   { path: '#/a', view: 'analytics', label: 'ניתוח' },
   { path: '#/log', view: 'activity', label: 'יומן' },
   { path: '#/guide', view: 'guide', label: 'מדריך' }
@@ -208,7 +213,7 @@ export default function App() {
         {data && (
           <AnimatePresence mode="wait">
             <motion.div
-              key={route.view + (route.id || '') + (route.view === 'project' || route.view === 'guide' ? '' : (route.tab || ''))}
+              key={route.view + (route.id || '') + (route.view === 'project' || route.view === 'guide' || route.view === 'reports' ? '' : (route.tab || ''))}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -222,6 +227,9 @@ export default function App() {
               {route.view === 'activity' && <ActivityView ctx={ctx} />}
               {route.view === 'reviews' && <ReviewsView ctx={ctx} />}
               {route.view === 'guide' && <Guide tab={route.tab} />}
+              {route.view === 'reports' && (route.id && findReport(route.id)
+                ? <ReportPage report={findReport(route.id)} tab={route.tab} />
+                : <ReportsView />)}
             </motion.div>
           </AnimatePresence>
         )}
