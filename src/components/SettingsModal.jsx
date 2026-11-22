@@ -3,7 +3,7 @@ import { Modal, Field } from './ui.jsx';
 import { api } from '../lib/api.js';
 import { KEY_STORAGE } from '../lib/config.js';
 import { CONTACT_ROLES } from '../lib/fields.js';
-import { CLAUDE_CODE_URL, InstallButton } from './ChromeBar.jsx';
+import { InstallButton } from './ChromeBar.jsx';
 import { browserName, downloadLauncher, isChrome, platform } from '../lib/browser.js';
 
 function entryLink() {
@@ -122,14 +122,6 @@ export default function SettingsModal({ open, onClose, ctx, onLogout }) {
             <button className="btn btn-ghost" onClick={() => downloadLauncher(link)}>הורדת קיצור דרך שנפתח בכרום</button>
           )}
           <span className="hint">כרגע פתוח ב־{browserName()}{isChrome() ? '. מצוין.' : '. כדאי לעבור לכרום.'}</span>
-        </div>
-      </section>
-
-      <section className="settings-block">
-        <h3 className="settings-title">עריכה ושדרוג ב־Claude</h3>
-        <p className="hint">פותח את שיחת הפיתוח ב־Claude Code, שבה נבנית האפליקציה. שם מבקשים תיקון, שינוי או מסך חדש.</p>
-        <div className="settings-row">
-          <a className="btn btn-ghost btn-claude" href={CLAUDE_CODE_URL} target="_blank" rel="noreferrer">עריכה ושדרוג ב־Claude</a>
         </div>
       </section>
 

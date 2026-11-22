@@ -16,7 +16,7 @@ import { findReport } from './lib/reports/index.js';
 import SettingsModal from './components/SettingsModal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import MailComposer from './components/MailComposer.jsx';
-import { ChromeBanner } from './components/ChromeBar.jsx';
+import { ChromeBanner, CLAUDE_CODE_URL } from './components/ChromeBar.jsx';
 
 // An entry link (?k=CODE) signs in with one click; the code is then removed from the address bar.
 function readKey() {
@@ -65,6 +65,7 @@ export default function App() {
   const [route, setRoute] = useState(parseRoute);
   const [toasts, setToasts] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const aiMenu = useRef(null);
   const [confirmState, setConfirmState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [mailRequest, setMailRequest] = useState(null);
@@ -135,6 +136,16 @@ export default function App() {
     role: data?.me?.role || 'editor'
   }), [data, mutate, query, toast, confirm, busy, load, key]);
 
+  // The A&I logo button holds copy link, dev chat, research project, install, settings and sign out.
+  useEffect(() => {
+    const el = aiMenu.current;
+    if (!el) return;
+    el.items = [
+      { label: 'הגדרות', hint: 'מיילים, אנשי קשר, כרום', onSelect: () => setSettingsOpen(true) },
+      { label: 'יציאה מהמערכת', onSelect: () => logout() },
+    ];
+  });
+
   // The guide is public: it explains the app before anyone has a code.
   if (!key && route.view === 'guide') {
     return (
@@ -197,7 +208,7 @@ export default function App() {
               {ctx.role === 'reviewer' ? 'הרשאת בודק' : 'צפייה בלבד'}
             </span>
           )}
-          <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)}>הגדרות</button>
+          <ai-menu ref={aiMenu} chat={CLAUDE_CODE_URL} research={data?.settings?.researchUrl || undefined} />
         </div>
       </header>
 

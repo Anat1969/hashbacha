@@ -96,3 +96,6 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 - `simulate()` in `src/lib/reports/index.js` is our sensitivity model, not the appraiser's; with `SIM_BASE` it must return the report's own bottom line (logic test).
 - תמל/2023 (אחד העם / הרצל) is a Standard 21 economic feasibility report, not a betterment levy appraisal: 5 of the 22 review parameters are absent from it.
 - `.share` is taken by the Settings share link; the bar in report tables is `.bar-share`.
+
+## A&I logo button
+The top bar holds only the app name (links home), content navigation, and ONE logo button "אד' ענת שטיבלמן A&I" (`<ai-menu>` from https://appofapp-gh.vercel.app/ai-menu.js). Every editing and development action (העתקת קישור, שיחת הפיתוח, פרויקט המחקר, התקנת האפליקציה, edit mode, add, delete) lives only inside it, never as loose buttons. Standard: https://github.com/Anat1969/AppOfApp-GH/blob/main/docs/ai-menu-standard.md
