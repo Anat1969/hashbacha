@@ -39,7 +39,7 @@
 
 ## Testing
 
-`npm run build && npm test` (24 logic checks + 190 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (29 logic checks + 210 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 Mocks must return exactly the shape the SQL function returns (2026-10-14: `hb_review_get` returned `id` while the mock returned `_id`, so every review write failed live). The mock answers 404 PGRST202 when a required RPC parameter is missing.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
@@ -88,6 +88,14 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 - The Claude research project link lives only in Settings (`hb_settings.data.researchUrl`, with an open button). Never put it on other pages (user feedback 2026-10-14).
 - Codes (2026-10-14): Anat Shtibelman, city architect = editor (existing code); Ilanit Zohar, betterment manager = reviewer; everyone else = one shared viewer code. Codes are only stored hashed; hand each person an entry link in Chrome form.
 - Roles per access code (`hb_access_keys.role`): editor (all), reviewer (review writes only), viewer (read). Viewer writes raise `hb_readonly` (toast, no logout).
+
+## Digital appraisal reports (built 2026-11-22)
+- Main menu item "דוחות שמאות" (`#/d`) lists reports; `#/d/:id/:chapter` is the digital document with eight sticky chapter tabs (same pattern as the guide).
+- A report is a static data module in `src/lib/reports/` (one file per report, registered in `index.js`). UI: `src/components/reports/`. No database table yet.
+- Every number is copied from the PDF with its page. Never copy apartment owners' names or mortgages into the data module (the bundle is public).
+- `simulate()` in `src/lib/reports/index.js` is our sensitivity model, not the appraiser's; with `SIM_BASE` it must return the report's own bottom line (logic test).
+- תמל/2023 (אחד העם / הרצל) is a Standard 21 economic feasibility report, not a betterment levy appraisal: 5 of the 22 review parameters are absent from it.
+- `.share` is taken by the Settings share link; the bar in report tables is `.bar-share`.
 
 ## A&I logo button
 The top bar holds only the app name (links home), content navigation, and ONE logo button "אד' ענת שטיבלמן A&I" (`<ai-menu>` from https://appofapp-gh.vercel.app/ai-menu.js). Every editing and development action (העתקת קישור, שיחת הפיתוח, פרויקט המחקר, התקנת האפליקציה, edit mode, add, delete) lives only inside it, never as loose buttons. Standard: https://github.com/Anat1969/AppOfApp-GH/blob/main/docs/ai-menu-standard.md

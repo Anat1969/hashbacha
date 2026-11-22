@@ -151,7 +151,8 @@ await new Promise((res, rej) => {
   server.stdout.on('data', (d) => { if (String(d).includes(PORT)) { clearTimeout(t); res(); } });
 });
 
-const exe = existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined;
+// The sandbox image changes its Chromium build; /opt/pw-browsers/chromium always points at the current one.
+const exe = ['/opt/pw-browsers/chromium', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'].find((x) => existsSync(x));
 const browser = await chromium.launch({ executablePath: exe });
 
 async function newPage(viewport) {
@@ -593,6 +594,34 @@ try {
 
   // ===== Appraisal review module =====
   console.log('Review: top-level overview');
+  // ---- Appraisal reports as digital documents ----
+  await page.goto(`${BASE}/?k=${KEY}#/d`);
+  await page.waitForSelector('.report-card');
+  ok(await page.isVisible('.nav-link.active:has-text("דוחות שמאות")'), 'main menu has "דוחות שמאות"');
+  ok(await page.isVisible('.report-card:has-text("אחד העם / הרצל")'), 'reports list shows the תמל/2023 report');
+  await page.click('.report-card');
+  await page.waitForSelector('.report-section');
+  ok(page.url().endsWith('#/d/tml2023') && await page.isVisible('.report-section h2:has-text("תחשיב כדאיות")'), 'report opens on the essence chapter');
+  ok((await page.locator('.report .guide-tabs a[role=tab]').count()) === 8 && (await page.locator('.money-track .seg').count()) === 7, 'eight report chapters; money bar has six costs and the profit');
+  for (const [id, t] of [['structure', 'איך הדוח בנוי'], ['plan', 'מ־110 דירות ל־532'], ['income', 'איך נקבע מחיר'], ['costs', 'שישה סלים'], ['accuracy', 'החשבון מדויק'], ['control', 'שאלות שעלו']]) {
+    await page.click(`.guide-tabs a[href="#/d/tml2023/${id}"]`);
+    await page.waitForSelector(`.report-section h2:has-text("${t}")`);
+    ok((await page.locator('.report-section').count()) === 1, `report chapter: ${t}`);
+  }
+  ok((await page.locator('.report-section .table').last().locator('tr.row').count()) === 22 && (await page.locator('.report-section .pill:has-text("אין בדוח")').count()) === 5, 'control chapter maps all 22 review parameters; 5 are missing from the report');
+  await page.click('.guide-tabs a[href="#/d/tml2023/result"]');
+  await page.waitForSelector('.sim');
+  ok((await page.textContent('[data-sim=profit]')).trim() === '159.4' && (await page.textContent('[data-sim=oncost]')).includes('20.5%'), 'simulator starts at the report result');
+  await page.locator('.sim input[type=range]').first().fill('-18');
+  ok((await page.textContent('[data-sim=profit]')).trim().startsWith('-0.') && (await page.textContent('[data-sim=delta]')).includes('הרווח קטן'), 'an 18% price drop wipes out the profit');
+  await page.click('.sim button:has-text("חזרה להנחות הדוח")');
+  await page.click('.sim .seg-control button:has-text("פטור")');
+  ok((await page.textContent('[data-sim=profit]')).trim() === '203.3', 'levy exemption: profit 203.3');
+  await page.screenshot({ path: `${SHOTS}/d1-report-result.png`, fullPage: true });
+  await page.goto(`${BASE}/#/d/tml2023/essence`);
+  await page.waitForSelector('.money-track');
+  await page.screenshot({ path: `${SHOTS}/d2-report-essence.png`, fullPage: true });
+
   await page.goto(`${BASE}/?k=${KEY}#/s`);
   await page.waitForSelector('.table-reviews');
   ok(await page.isVisible('.nav-link.active:has-text("בקרת שומות")'), 'main menu has "בקרת שומות"');
@@ -761,7 +790,7 @@ try {
   await m.page.click('.modal button:has-text("ביטול")');
   await m.page.click('button:has-text("חוות דעת חדשה")');
   await noHorizontalScroll(m.page, 'new opinion form');
-  for (const path of ['#/s', '#/guide', '#/guide/roles', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
+  for (const path of ['#/s', '#/d', '#/d/tml2023', '#/d/tml2023/income', '#/d/tml2023/costs', '#/d/tml2023/result', '#/d/tml2023/control', '#/guide', '#/guide/roles', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
     await m.page.goto(`${BASE}/${path}`);
     await m.page.waitForTimeout(900);
     await noHorizontalScroll(m.page, path);
