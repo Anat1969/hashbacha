@@ -819,3 +819,9 @@ a.project-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .sim-out .summary dd.neg { color: var(--red); }
 .sim-delta { margin: 0; font-size: 16px; color: var(--ink-2); }
 .sim-delta b { color: var(--ink); }
+.report-link { padding-block: 16px; }
+.report-link .panel-head { margin-bottom: 10px; align-items: center; }
+.report-versions { margin-top: 6px; }
+.report-versions .pill { white-space: normal; font-size: 13.5px; }
+.report-versions .pill b { color: var(--ink); font-weight: 600; margin-inline-start: 3px; }
+.report-chip { font-weight: 500; }

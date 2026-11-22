@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ease } from '../ui.jsx';
 import { PARAMS, CHAPTERS } from '../../lib/review/rules.js';
 import { PROFIT_THRESHOLD } from '../../lib/config.js';
-import { SOURCES, SIM_BASE, simulate, breakEvenPrice, fmt, million } from '../../lib/reports/index.js';
+import { SOURCES, SIM_BASE, simulate, breakEvenPrice, fmt, million, projectForReport } from '../../lib/reports/index.js';
 
 const SECTIONS = [
   ['essence', 'תמצית'],
@@ -119,7 +119,36 @@ function Simulator({ r }) {
   );
 }
 
-export default function ReportPage({ report: r, tab }) {
+// The report next to what the database already holds for the same project: profit as it moved between versions.
+function ProjectLink({ r, entry }) {
+  if (!entry) return <p className="hint report-nolink">הדוח עדיין לא מקושר לפרויקט במאגר. הקישור נוצר לבד כשמספר התכנית של הפרויקט כולל "{r.plan}".</p>;
+  const p = entry.project;
+  const ops = entry.opinions.filter((o) => o['רווחיות יזם (%)'] || o['רווחיות עירייה (%)']);
+  return (
+    <section className="panel report-link">
+      <div className="panel-head">
+        <div>
+          <span className="label">מקושר לפרויקט במאגר · רובע {p['רובע'] || '—'} · {p["מס' תכנית/ מס זמני"]}</span>
+          <h2 className="display-s">{(p['שם התכנית'] || p['כתובת הפרויקט'] || '').replace(/\s+/g, ' ')}</h2>
+        </div>
+        <a className="btn btn-primary" href={`#/p/${p._id}`}>לכרטיס הפרויקט</a>
+      </div>
+      <span className="label">רווחיות היזם לאורך הגרסאות</span>
+      <div className="chips report-versions">
+        {ops.map((o, i) => (
+          <span key={o._id || i} className="pill pill-none">
+            חוות דעת {o['תאריך קבלת חוו"ד'] || o['תאריך קבלת בקשה'] || i + 1}: <b>{o['רווחיות יזם (%)'] || '—'}</b>{o['רווחיות עירייה (%)'] ? ` · עירייה ${o['רווחיות עירייה (%)']}` : ''}
+          </span>
+        ))}
+        <span className="pill pill-amber">הדוח הזה, {r.written}: <b>{r.result.onSales.toFixed(1)}% מהמכירות</b> · {r.result.onCost}% מהעלויות</span>
+      </div>
+      <p className="hint">{ops.length ? 'המספרים במאגר הוקלדו מחוות דעת קודמות. אם הם שונים מהדוח, כדאי לבדוק מאיזה מכנה חושב כל אחד: מהעלויות או מהמכירות.' : 'במאגר עוד לא נרשמה רווחיות לפרויקט הזה.'}</p>
+    </section>
+  );
+}
+
+export default function ReportPage({ ctx, report: r, tab }) {
+  const entry = projectForReport(r, ctx?.data?.projects);
   const cur = SECTIONS.some(([id]) => id === tab) ? tab : SECTIONS[0][0];
   const base = `#/d/${r.id}`;
   const [stickTop, setStickTop] = useState(76);
@@ -143,6 +172,8 @@ export default function ReportPage({ report: r, tab }) {
           <p className="lead">{r.address}. מזמין: {r.developer}. שמאי: {r.appraiser}. נחתם ב־{r.written}, נכון ל־{r.effective}. {r.pages} עמודים.</p>
         </div>
       </section>
+
+      <ProjectLink r={r} entry={entry} />
 
       <nav className="seg-control guide-tabs" role="tablist" aria-label="פרקי הדוח הדיגיטלי" style={{ top: stickTop }}>
         {SECTIONS.map(([id, l], i) => (

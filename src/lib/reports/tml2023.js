@@ -27,6 +27,8 @@ export const TML2023 = {
   effective: '30.01.2024',
   pages: 59,
   file: 'תיק 4059.16',
+  // How the report finds its project in the database: any of these inside the project's plan-number field.
+  planKeys: ['תמל2023', '6030392696'],
 
   // ---- 01 ----
   is: 'שומת מקרקעין מלאה, מבוססת הנחה. היא בודקת אם התכנית כדאית כלכלית ליזם: כמה ייכנס ממכירת הדירות, כמה יעלה לבנות ולפנות, וכמה רווח נשאר.',

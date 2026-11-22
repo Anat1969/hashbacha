@@ -4,6 +4,15 @@ export { SOURCES } from './tml2023.js';
 export const REPORTS = [TML2023];
 export const findReport = (id) => REPORTS.find((r) => r.id === id) || null;
 
+// A report belongs to the project whose plan-number field holds one of its plan keys (punctuation ignored).
+const PLAN_FIELD = "מס' תכנית/ מס זמני";
+const squash = (x) => String(x || '').replace(/["'׳״/\\\s\-_.]/g, '');
+export const reportsForProject = (project) => {
+  const plan = squash(project?.[PLAN_FIELD]);
+  return plan ? REPORTS.filter((r) => (r.planKeys || []).some((k) => plan.includes(squash(k)))) : [];
+};
+export const projectForReport = (report, projects = []) => projects.find((e) => reportsForProject(e.project).includes(report)) || null;
+
 export const SIM_BASE = { price: 0, build: 0, months: 48, levy: 50 };
 
 // Sensitivity model for the feasibility calculation (thousands of ₪).
