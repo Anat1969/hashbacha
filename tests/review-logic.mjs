@@ -86,5 +86,15 @@ ok(Math.abs(simulate({ ...SIM_BASE, price: breakEvenPrice() }).profit) < 1 && Ma
 ok(Math.round(simulate({ ...SIM_BASE, levy: 0 }).profit - b0.profit) === 43900 && simulate({ ...SIM_BASE, build: 10 }).profit < b0.profit && simulate({ ...SIM_BASE, months: 60 }).profit < b0.profit, 'levy exemption adds 43,900; dearer or longer construction lowers profit');
 ok(rep.sales.reduce((a, x) => a + x[1], 0) === 422 && rep.sales.reduce((a, x) => a + x[5], 0) === 1031570, 'sales table: 422 developer units, 1,031,570 incl. VAT');
 
+// Report comparison and project linking.
+const cmp = await import('../src/lib/reports/compare.js');
+const { reportsForProject } = await import('../src/lib/reports/index.js');
+const cs = cmp.compareSummary();
+ok(cs.reports === 3 && cs.topics === 18 && cs.core === 14 && cs.missing === 2 && cs.partial === 2 && cs.sameAssumptions === 6, `comparison summary: ${JSON.stringify(cs)}`);
+ok([cmp.TOPICS, cmp.ASSUMPTIONS, cmp.FORM].every((t) => t.every((r) => r[r.length === 2 ? 1 : 2].length === 3)) && cmp.RESULTS.every((r) => r[1].length === 3), 'every comparison row has one value per report');
+ok(cmp.RESULTS.find((r) => r[0] === 'רווח')[1].every((v, i) => Math.abs(v - (cmp.RESULTS[3][1][i] - cmp.RESULTS[4][1][i])) < 0.15), 'profit = revenue - cost in each compared report');
+const plan = (v) => ({ "מס' תכנית/ מס זמני": v });
+ok(reportsForProject(plan('603-0392696 תמ"ל 2023'))[0]?.id === 'tml2023' && reportsForProject(plan('תמ"ל 2047 2047'))[0]?.id === 'tml2047' && !reportsForProject(plan('תמ"ל 2021')).length && !reportsForProject(plan('')).length, 'reports match projects by plan number');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

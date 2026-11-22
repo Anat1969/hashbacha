@@ -599,6 +599,28 @@ try {
   await page.waitForSelector('.report-card');
   ok(await page.isVisible('.nav-link.active:has-text("דוחות שמאות")'), 'main menu has "דוחות שמאות"');
   ok(await page.isVisible('.report-card:has-text("אחד העם / הרצל")'), 'reports list shows the תמל/2023 report');
+  ok((await page.locator('.report-card').count()) === 3 && (await page.locator('.report-card .pill:has-text("מקושר לפרויקט במאגר")').count()) === 3, 'three reports, each linked to its project by plan number');
+  // Comparison between reports
+  await page.click('.detail-tabs a:has-text("השוואה בין הדוחות")');
+  await page.waitForSelector('.table-compare');
+  ok(page.url().endsWith('#/d/compare') && await page.isVisible('h2:has-text("התוכן קבוע. הצורה לא")'), 'comparison tab opens');
+  const rowsIn = (id) => page.locator(`#${id} .table-compare`).first().locator('tr.row').count();
+  ok((await rowsIn('compare-skeleton')) === 18 && (await rowsIn('compare-assumptions')) === 29 && (await rowsIn('compare-results')) === 12, 'comparison: 18 topics, 29 assumptions, 12 results');
+  ok((await page.locator('#compare-skeleton .pill:has-text("חסר בכולם")').count()) === 2, 'two topics are missing from every report');
+  await page.click('.compare-filter button:has-text("רק הבדלים")');
+  ok((await rowsIn('compare-skeleton')) === 2 && (await rowsIn('compare-assumptions')) === 23, 'filter "רק הבדלים": 2 topics, 23 assumptions');
+  await page.click('.compare-filter button:has-text("רק מה שזהה")');
+  ok((await rowsIn('compare-skeleton')) === 16 && (await rowsIn('compare-assumptions')) === 6 && !(await page.isVisible('#compare-results')), 'filter "רק מה שזהה": 16 topics, 6 assumptions');
+  await page.click('.compare-filter button:has-text("הכול")');
+  await page.screenshot({ path: `${SHOTS}/d0-compare.png`, fullPage: true });
+  await page.click('.compare-cards a:has-text("כרטיס הפרויקט") >> nth=0');
+  await page.waitForSelector('.page-detail');
+  ok(await page.isVisible('.report-chip:has-text("דוח שמאי דיגיטלי")'), 'project card links to its digital report');
+  await page.click('.report-chip');
+  await page.waitForSelector('.report-link');
+  ok(page.url().endsWith('#/d/tml2023') && await page.isVisible('.report-link a:has-text("לכרטיס הפרויקט")') && (await page.locator('.report-versions .pill').count()) >= 2, 'report shows its project and the profit recorded across versions');
+  await page.goto(`${BASE}/#/d`);
+  await page.waitForSelector('.report-card');
   await page.click('.report-card');
   await page.waitForSelector('.report-section');
   ok(page.url().endsWith('#/d/tml2023') && await page.isVisible('.report-section h2:has-text("תחשיב כדאיות")'), 'report opens on the essence chapter');
@@ -790,7 +812,7 @@ try {
   await m.page.click('.modal button:has-text("ביטול")');
   await m.page.click('button:has-text("חוות דעת חדשה")');
   await noHorizontalScroll(m.page, 'new opinion form');
-  for (const path of ['#/s', '#/d', '#/d/tml2023', '#/d/tml2023/income', '#/d/tml2023/costs', '#/d/tml2023/result', '#/d/tml2023/control', '#/guide', '#/guide/roles', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
+  for (const path of ['#/s', '#/d', '#/d/compare', '#/d/tml2023', '#/d/tml2023/income', '#/d/tml2023/costs', '#/d/tml2023/result', '#/d/tml2023/control', '#/guide', '#/guide/roles', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
     await m.page.goto(`${BASE}/${path}`);
     await m.page.waitForTimeout(900);
     await noHorizontalScroll(m.page, path);
