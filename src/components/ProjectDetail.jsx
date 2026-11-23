@@ -100,7 +100,7 @@ export default function ProjectDetail({ ctx, entry, tab, reviewId }) {
           <div className="detail-badges">
             <StatusPill value={p['סטטוס רמזור']} />
             {p['קישור'] && <a className="chip" href={p['קישור']} target="_blank" rel="noreferrer">קישור לתכנית</a>}
-            {reportsForProject(p).map((r) => <a key={r.id} className="chip report-chip" href={reportHref(r)}>{r.digital ? 'דוח שמאי דיגיטלי' : 'דוח שמאי בהשוואה'} · {r.written}</a>)}
+            {reportsForProject(p).map((r) => <a key={r.id} className="chip report-chip" href={reportHref(r)}>דוח כלכלי דיגיטלי · {r.written}</a>)}
           </div>
         </div>
         <div className="detail-figures">

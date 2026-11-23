@@ -835,3 +835,6 @@ a.project-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .table-compare td { vertical-align: top; }
 .table-compare td .mono { font-size: 13px; }
 @media (max-width: 860px) { .compare-filter { top: 118px; } }
+.report-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+.report-nav .back { margin-top: 0; }
+.report-verified { display: block; font-size: 14px; margin-top: 6px; }

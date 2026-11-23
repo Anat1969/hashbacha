@@ -597,7 +597,7 @@ try {
   // ---- Appraisal reports as digital documents ----
   await page.goto(`${BASE}/?k=${KEY}#/d`);
   await page.waitForSelector('.report-card');
-  ok(await page.isVisible('.nav-link.active:has-text("דוחות שמאות")'), 'main menu has "דוחות שמאות"');
+  ok(await page.isVisible('.nav-link.active:has-text("דוחות כלכליים")'), 'main menu has "דוחות כלכליים"');
   ok(await page.isVisible('.report-card:has-text("אחד העם / הרצל")'), 'reports list shows the תמל/2023 report');
   ok((await page.locator('.report-card').count()) === 3 && (await page.locator('.report-card .pill:has-text("מקושר לפרויקט במאגר")').count()) === 3, 'three reports, each linked to its project by plan number');
   // Comparison between reports
@@ -615,17 +615,40 @@ try {
   await page.screenshot({ path: `${SHOTS}/d0-compare.png`, fullPage: true });
   await page.click('.compare-cards a:has-text("כרטיס הפרויקט") >> nth=0');
   await page.waitForSelector('.page-detail');
-  ok(await page.isVisible('.report-chip:has-text("דוח שמאי דיגיטלי")'), 'project card links to its digital report');
+  ok(await page.isVisible('.report-chip:has-text("דוח כלכלי דיגיטלי")'), 'project card links to its digital report');
   await page.click('.report-chip');
   await page.waitForSelector('.report-link');
   ok(page.url().endsWith('#/d/tml2023') && await page.isVisible('.report-link a:has-text("לכרטיס הפרויקט")') && (await page.locator('.report-versions .pill').count()) >= 2, 'report shows its project and the profit recorded across versions');
   await page.goto(`${BASE}/#/d`);
   await page.waitForSelector('.report-card');
+  // The two other reports are full digital documents too.
+  for (const [id, title, profit, plan] of [['tml2022', 'ציר הרצל · המעפילים', '643.2', 'מ־488 דירות ל־2,196'], ['tml2047', 'הרב מימון', '440.7', 'מ־298 דירות ל־1,431']]) {
+    await page.click(`.report-card[href="#/d/${id}"]`);
+    await page.waitForSelector('.report-section');
+    ok(await page.isVisible(`h1:has-text("${title}")`) && (await page.locator('.report .guide-tabs a[role=tab]').count()) === 8 && await page.isVisible('.report-link'), `${id}: digital document with eight chapters and its project`);
+    for (const ch of ['structure', 'plan', 'income', 'costs', 'accuracy', 'control']) {
+      await page.click(`.guide-tabs a[href="#/d/${id}/${ch}"]`);
+      await page.waitForFunction((h) => window.location.hash === h, `#/d/${id}/${ch}`);
+      await page.waitForSelector('.report-section');
+    }
+    ok((await page.locator('.report-section .table').last().locator('tr.row').count()) === 22, `${id}: control chapter maps the 22 parameters`);
+    await page.click(`.guide-tabs a[href="#/d/${id}/plan"]`);
+    ok(await page.isVisible(`.report-section h2:has-text("${plan}")`), `${id}: plan chapter title from its own numbers`);
+    await page.click(`.guide-tabs a[href="#/d/${id}/result"]`);
+    await page.waitForSelector('.sim');
+    ok((await page.textContent('[data-sim=profit]')).trim() === profit, `${id}: simulator starts at ${profit}`);
+    await page.click('.sim .seg-control button:has-text("פטור")');
+    ok(Number((await page.textContent('[data-sim=profit]')).trim().replace(/,/g, '')) > Number(profit), `${id}: levy exemption raises the profit`);
+    await page.click('.report-nav a:has-text("השוואה בין הדוחות")');
+    await page.waitForSelector('.table-compare');
+    await page.goto(`${BASE}/#/d`);
+    await page.waitForSelector('.report-card');
+  }
   await page.click('.report-card');
   await page.waitForSelector('.report-section');
   ok(page.url().endsWith('#/d/tml2023') && await page.isVisible('.report-section h2:has-text("תחשיב כדאיות")'), 'report opens on the essence chapter');
   ok((await page.locator('.report .guide-tabs a[role=tab]').count()) === 8 && (await page.locator('.money-track .seg').count()) === 7, 'eight report chapters; money bar has six costs and the profit');
-  for (const [id, t] of [['structure', 'איך הדוח בנוי'], ['plan', 'מ־110 דירות ל־532'], ['income', 'איך נקבע מחיר'], ['costs', 'שישה סלים'], ['accuracy', 'החשבון מדויק'], ['control', 'שאלות שעלו']]) {
+  for (const [id, t] of [['structure', 'איך הדוח בנוי'], ['plan', 'מ־110 דירות ל־532'], ['income', 'איך נקבע מחיר'], ['costs', 'סלים של עלות'], ['accuracy', 'החשבון מדויק'], ['control', 'שאלות שעלו']]) {
     await page.click(`.guide-tabs a[href="#/d/tml2023/${id}"]`);
     await page.waitForSelector(`.report-section h2:has-text("${t}")`);
     ok((await page.locator('.report-section').count()) === 1, `report chapter: ${t}`);
@@ -812,7 +835,7 @@ try {
   await m.page.click('.modal button:has-text("ביטול")');
   await m.page.click('button:has-text("חוות דעת חדשה")');
   await noHorizontalScroll(m.page, 'new opinion form');
-  for (const path of ['#/s', '#/d', '#/d/compare', '#/d/tml2023', '#/d/tml2023/income', '#/d/tml2023/costs', '#/d/tml2023/result', '#/d/tml2023/control', '#/guide', '#/guide/roles', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
+  for (const path of ['#/s', '#/d', '#/d/compare', '#/d/tml2023', '#/d/tml2023/income', '#/d/tml2023/costs', '#/d/tml2023/result', '#/d/tml2023/control', '#/d/tml2022', '#/d/tml2022/costs', '#/d/tml2022/result', '#/d/tml2047/income', '#/d/tml2047/control', '#/guide', '#/guide/roles', '#/a', '#/a/gap', '#/a/turnaround', '#/log']) {
     await m.page.goto(`${BASE}/${path}`);
     await m.page.waitForTimeout(900);
     await noHorizontalScroll(m.page, path);

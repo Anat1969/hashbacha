@@ -39,7 +39,7 @@
 
 ## Testing
 
-`npm run build && npm test` (33 logic checks + 221 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
+`npm run build && npm test` (43 logic checks + 236 e2e checks) — Playwright (playwright-core, Chromium at /opt/pw-browsers) against `vite preview`, with every Supabase RPC mocked in-memory. Asserts each button's RPC payload and no horizontal scroll at 390px.
 Mocks must return exactly the shape the SQL function returns (2026-10-14: `hb_review_get` returned `id` while the mock returned `_id`, so every review write failed live). The mock answers 404 PGRST202 when a required RPC parameter is missing.
 The test spawns vite via `node node_modules/vite/bin/vite.js` (not npx) so the server is killed afterwards.
 
@@ -90,7 +90,7 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 - Roles per access code (`hb_access_keys.role`): editor (all), reviewer (review writes only), viewer (read). Viewer writes raise `hb_readonly` (toast, no logout).
 
 ## Digital appraisal reports (built 2026-11-22)
-- Main menu item "דוחות שמאות" (`#/d`) lists reports; `#/d/:id/:chapter` is the digital document with eight sticky chapter tabs (same pattern as the guide).
+- Main menu item "דוחות כלכליים" (`#/d`, renamed from "דוחות שמאות" on user request 2026-11-23) lists reports; `#/d/:id/:chapter` is the digital document with eight sticky chapter tabs (same pattern as the guide).
 - A report is a static data module in `src/lib/reports/` (one file per report, registered in `index.js`). UI: `src/components/reports/`. No database table yet.
 - Every number is copied from the PDF with its page. Never copy apartment owners' names or mortgages into the data module (the bundle is public).
 - `simulate()` in `src/lib/reports/index.js` is our sensitivity model, not the appraiser's; with `SIM_BASE` it must return the report's own bottom line (logic test).
@@ -98,7 +98,9 @@ Architectural grayscale, IBM Plex Sans Hebrew (thin only at display sizes), IBM 
 - `.share` is taken by the Settings share link; the bar in report tables is `.bar-share`.
 - Reports link to database projects by plan number (`planKeys` in `src/lib/reports/compare.js`, `reportsForProject`): the project card shows a chip to the report, and the report shows the project with the developer profit recorded across earlier opinions.
 - Comparison between reports: `#/d/compare` (tab in "דוחות שמאות", `CompareView.jsx`, data in `src/lib/reports/compare.js`). Column order is always [tml2023, tml2022, tml2047]. Three tables: skeleton (where each appraiser put each topic), assumptions, results; filter "רק הבדלים" / "רק מה שזהה". A new report needs one more value in every row.
-- תמל/2022 and תמל/2047 are comparison-only (extracted from the PDFs in Drive, checked by arithmetic); only תמל/2023 is a full digital document. Mark every figure that is our own arithmetic as "חישוב שלנו".
+- All three reports (תמל/2023, תמל/2022, תמל/2047) are full digital documents. `ReportPage.jsx` is data-driven: no report-specific text or number may live in the component. Each report module carries its own labels, `resultNotes`, `simNotes` and `model` (the sensitivity constants); `simulate(report.model, inputs)` must reproduce that report's bottom line at `simBase(model)` (logic test, per report).
+- תמל/2022 and תמל/2047 were extracted from the PDFs in Drive: summary pages checked by eye, the rest by arithmetic; the page says so (`verified`). Their amounts are stored in thousands of ₪ although the PDFs print full ₪. Mark every figure that is our own arithmetic as "חישוב שלנו".
+- Adding a report: one module in `src/lib/reports/`, register it in `index.js`, add a card and one value per row in `compare.js`.
 
 ## A&I logo button
 The top bar holds only the app name (links home), content navigation, and ONE logo button "אד' ענת שטיבלמן A&I" (`<ai-menu>` from https://appofapp-gh.vercel.app/ai-menu.js). Every editing and development action (העתקת קישור, שיחת הפיתוח, פרויקט המחקר, התקנת האפליקציה, edit mode, add, delete) lives only inside it, never as loose buttons. Standard: https://github.com/Anat1969/AppOfApp-GH/blob/main/docs/ai-menu-standard.md

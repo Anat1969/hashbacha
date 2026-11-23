@@ -5,8 +5,8 @@
 
 export const CARDS = [
   { id: 'tml2023', plan: 'תמל/2023', title: 'אחד העם / הרצל', quarter: 'רובע ה׳', developer: 'י.ח. דמרי', appraiser: 'אביב גלעד', written: '17.09.2024', effective: '30.01.2024', pages: 59, existing: 110, units: 532, digital: true, checked: 'נקרא עמוד אחר עמוד', planKeys: ['תמל2023', '6030392696'] },
-  { id: 'tml2022', plan: 'תמל/2022', title: 'ציר הרצל · המעפילים', quarter: 'רובע ב׳', developer: 'איבריקה המעפילים', appraiser: 'מאיר חיים', written: '14.01.2025', effective: '14.01.2025', pages: 54, existing: 488, units: 2196, digital: false, checked: 'חולץ מה־PDF, נבדק בחשבון', planKeys: ['תמל2022'] },
-  { id: 'tml2047', plan: 'תמל/2047', title: 'הרב מימון', quarter: 'רובע ב׳', developer: 'ספיר התחדשות עירונית', appraiser: 'אייל דנינו', written: '21.05.2025', effective: '29.12.2024', pages: 76, existing: 298, units: 1431, digital: false, checked: 'חולץ מה־PDF, נבדק בחשבון', planKeys: ['תמל2047'] }
+  { id: 'tml2022', plan: 'תמל/2022', title: 'ציר הרצל · המעפילים', quarter: 'רובע ב׳', developer: 'איבריקה המעפילים', appraiser: 'מאיר חיים', written: '14.01.2025', effective: '14.01.2025', pages: 54, existing: 488, units: 2196, digital: true, checked: 'חולץ מה־PDF, הסיכום אומת בעין', planKeys: ['תמל2022'] },
+  { id: 'tml2047', plan: 'תמל/2047', title: 'הרב מימון', quarter: 'רובע ב׳', developer: 'ספיר התחדשות עירונית', appraiser: 'אייל דנינו', written: '21.05.2025', effective: '29.12.2024', pages: 76, existing: 298, units: 1431, digital: true, checked: 'חולץ מה־PDF, הסיכום אומת בעין', planKeys: ['תמל2047'] }
 ];
 
 const NONE = null; // the topic is absent from that report

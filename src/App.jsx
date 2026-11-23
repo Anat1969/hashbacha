@@ -52,7 +52,7 @@ export function go(path) {
 const NAV = [
   { path: '#/', view: 'projects', label: 'פרויקטים' },
   { path: '#/s', view: 'reviews', label: 'בקרת שומות' },
-  { path: '#/d', view: 'reports', label: 'דוחות שמאות' },
+  { path: '#/d', view: 'reports', label: 'דוחות כלכליים' },
   { path: '#/a', view: 'analytics', label: 'ניתוח' },
   { path: '#/log', view: 'activity', label: 'יומן' },
   { path: '#/guide', view: 'guide', label: 'מדריך' }
