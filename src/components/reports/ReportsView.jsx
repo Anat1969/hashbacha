@@ -12,8 +12,8 @@ export default function ReportsView({ ctx, compare = false }) {
     <div className="page">
       <section className="hero hero-compact">
         <div className="hero-text">
-          <span className="label">דוחות שמאות · מסמך דיגיטלי והשוואה</span>
-          <h1 className="display-l">דוחות שמאות<br /><span className="thin">{compare ? 'אותו תוכן, צורה אחרת בכל דוח' : 'לקרוא שומה כמו שקוראים תכנית'}</span></h1>
+          <span className="label">חוות דעת כלכליות לתכניות פינוי־בינוי · תקן 21.1</span>
+          <h1 className="display-l">דוחות כלכליים<br /><span className="thin">{compare ? 'אותו תוכן, צורה אחרת בכל דוח' : 'לקרוא חוות דעת כלכלית כמו שקוראים תכנית'}</span></h1>
           <p className="lead">
             {compare
               ? `${sum.reports} דוחות, ${sum.reports} שמאים, אותו תקן. ההשוואה מראה מה קבוע בכולם, מה חסר בכולם, ואיפה כל שמאי בחר אחרת.`
@@ -50,12 +50,12 @@ export default function ReportsView({ ctx, compare = false }) {
                     <span className={`pill ${entry ? 'pill-green' : 'pill-none'}`}>{entry ? 'מקושר לפרויקט במאגר' : 'אין פרויקט מקושר'}</span>
                     <span className="pill pill-none">{r.checked}</span>
                   </span>
-                  <span className={`btn ${r.digital ? 'btn-primary' : 'btn-ghost'} report-open`}>{r.digital ? 'פתיחת המסמך הדיגיטלי' : 'בהשוואה בלבד · לפתיחת ההשוואה'}</span>
+                  <span className="btn btn-primary report-open">פתיחת המסמך הדיגיטלי</span>
                 </motion.a>
               );
             })}
           </div>
-          <p className="hint">שמות בעלי הדירות והמשכנתאות אינם מועתקים. דוח הופך למסמך דיגיטלי מלא כשמבקשים זאת בשיחת העריכה ב־Claude.</p>
+          <p className="hint">שמות בעלי הדירות והמשכנתאות אינם מועתקים. דוח חדש נכנס לרשימה כששולחים את ה־PDF שלו בשיחת העריכה ב־Claude.</p>
         </section>
       )}
     </div>

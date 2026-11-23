@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ease } from '../ui.jsx';
 import { PARAMS, CHAPTERS } from '../../lib/review/rules.js';
 import { PROFIT_THRESHOLD } from '../../lib/config.js';
-import { SOURCES, SIM_BASE, simulate, breakEvenPrice, fmt, million, projectForReport } from '../../lib/reports/index.js';
+import { SOURCES, simBase, simulate, breakEvenPrice, fmt, million, projectForReport } from '../../lib/reports/index.js';
 
 const SECTIONS = [
   ['essence', 'תמצית'],
@@ -48,10 +48,11 @@ const KIND = { fact: ['כתוב בדוח', 'none'], calc: ['חישוב שלנו'
 const arrow = (v) => (v > PROFIT_THRESHOLD ? <span className="arrow-up">↑</span> : <span className="arrow-down">↓</span>);
 
 // Where every shekel of revenue goes. Only the levy is coloured: it is the city's share.
-const SHADES = { dev: '#3a3c41', pb: '#5b5d63', fin: '#8b8d92', pub: '#a3a49f', init: '#c9cac6' };
+const SHADES = ['#3a3c41', '#5b5d63', '#8b8d92', '#a3a49f', '#c9cac6'];
 function MoneyBar({ r }) {
   const parts = [...r.costs.map((c) => ({ ...c, share: c.sum / r.revenueTotal })), { id: 'profit', name: 'רווח יזמי', sum: r.result.profit, share: r.result.profit / r.revenueTotal }];
-  const bg = (id) => (id === 'profit' ? '#111214' : SHADES[id]);
+  const grey = r.costs.filter((c) => c.id !== 'levy').map((c) => c.id);
+  const bg = (id) => (id === 'profit' ? '#111214' : SHADES[grey.indexOf(id) % SHADES.length]);
   return (
     <div className="money">
       <div className="statusbar-track money-track" role="img" aria-label="חלוקת התקבולים בין העלויות לרווח">
@@ -70,16 +71,17 @@ function MoneyBar({ r }) {
 }
 
 function Simulator({ r }) {
+  const SIM_BASE = simBase(r.model);
   const [v, setV] = useState(SIM_BASE);
-  const out = simulate(v);
-  const base = simulate(SIM_BASE);
+  const out = simulate(r.model, v);
+  const base = simulate(r.model, SIM_BASE);
   const set = (k) => (e) => setV((s) => ({ ...s, [k]: Number(e.target.value) }));
   const changed = Object.keys(SIM_BASE).some((k) => v[k] !== SIM_BASE[k]);
   const delta = out.profit - base.profit;
   const sliders = [
-    ['price', 'מחיר מכירה למ"ר', -25, 15, 1, (x) => `${x > 0 ? '+' : ''}${x}%`, 'נתון שוק מותאם'],
-    ['build', 'עלות בנייה למ"ר', -10, 30, 1, (x) => `${x > 0 ? '+' : ''}${x}%`, 'הנחיה מוכתבת: 5,500 ₪'],
-    ['months', 'תקופת הבנייה', 36, 84, 6, (x) => `${x} חודשים`, 'שיקול דעת: 48 חודשים']
+    ['price', 'מחיר מכירה למ"ר', -25, 15, 1, (x) => `${x > 0 ? '+' : ''}${x}%`, r.simNotes.price],
+    ['build', 'עלות בנייה למ"ר', -10, 30, 1, (x) => `${x > 0 ? '+' : ''}${x}%`, r.simNotes.build],
+    ['months', 'תקופת הבנייה', r.model.months - 12, r.model.months + 36, 6, (x) => `${x} חודשים`, r.simNotes.months]
   ];
   return (
     <div className="sim">
@@ -96,7 +98,7 @@ function Simulator({ r }) {
           <div className="seg-control" role="group" aria-label="שיעור היטל ההשבחה">
             {[[0, 'פטור'], [25, '25%'], [50, '50%']].map(([x, l]) => <button key={x} type="button" className={v.levy === x ? 'on' : ''} aria-pressed={v.levy === x} onClick={() => setV((s) => ({ ...s, levy: x }))}>{l}</button>)}
           </div>
-          <span className="label">הנחת עבודה: 50%, החלטת מועצת העיר</span>
+          <span className="label">{r.simNotes.levy}</span>
         </div>
         <button type="button" className="btn btn-ghost" disabled={!changed} onClick={() => setV(SIM_BASE)}>חזרה להנחות הדוח</button>
       </div>
@@ -110,7 +112,7 @@ function Simulator({ r }) {
         </dl>
         <p className="sim-delta" data-sim="delta">
           {changed
-            ? <><b>{delta >= 0 ? 'הרווח גדל' : 'הרווח קטן'} ב־{million(Math.abs(delta))} מיליון ₪</b> לעומת הדוח ({million(base.profit)}).{out.onCost < r.agreementProfit ? ` מתחת ל־${r.agreementProfit}% שטיוטת ההסכם דורשת.` : ` מעל ${r.agreementProfit}% שטיוטת ההסכם דורשת.`}</>
+            ? <><b>{delta >= 0 ? 'הרווח גדל' : 'הרווח קטן'} ב־{million(Math.abs(delta))} מיליון ₪</b> לעומת הדוח ({million(base.profit)}).{r.agreementProfit ? (out.onCost < r.agreementProfit ? ` מתחת ל־${r.agreementProfit}% שטיוטת ההסכם דורשת.` : ` מעל ${r.agreementProfit}% שטיוטת ההסכם דורשת.`) : ''}</>
             : <>זו התוצאה של הדוח. הזיזו הנחה אחת וראו כמה הרווח רגיש אליה.</>}
         </p>
         <p className="hint">מודל פשוט שלנו, לא של השמאי: כל שורת עלות נעה עם הגורם שהדוח עצמו קושר אותה אליו. ההיטל משתנה רק לפי השיעור. החץ משווה לבנצ׳מרק של {PROFIT_THRESHOLD}% באפליקציה.</p>
@@ -158,18 +160,19 @@ export default function ReportPage({ ctx, report: r, tab }) {
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
-  const be = Math.abs(breakEvenPrice()).toFixed(0);
+  const be = Math.abs(breakEvenPrice(r.model)).toFixed(0);
+  const maxValue = Math.max(...r.values.map((x) => x[1]));
   const maxSum = Math.max(...r.costs.map((c) => c.sum));
   const srcCount = (k) => r.unitCosts.filter((u) => u[2] === k).length;
 
   return (
     <div className="page guide report">
-      <a className="back" href="#/d">לרשימת הדוחות</a>
+      <div className="report-nav"><a className="back" href="#/d">לרשימת הדוחות</a><a className="chip" href="#/d/compare">השוואה בין הדוחות</a></div>
       <section className="hero hero-compact">
         <div className="hero-text">
           <span className="label">{r.plan} · {r.city} · {r.kind}</span>
-          <h1 className="display-l">{r.title}<br /><span className="thin">דוח שמאי, פרוק לחלקיו</span></h1>
-          <p className="lead">{r.address}. מזמין: {r.developer}. שמאי: {r.appraiser}. נחתם ב־{r.written}, נכון ל־{r.effective}. {r.pages} עמודים.</p>
+          <h1 className="display-l">{r.title}<br /><span className="thin">דוח כלכלי, פרוק לחלקיו</span></h1>
+          <p className="lead">{r.address}. מזמין: {r.developer}. שמאי: {r.appraiser}. נחתם ב־{r.written}, נכון ל־{r.effective}. {r.pages} עמודים. <span className="report-verified">{r.verified}</span></p>
         </div>
       </section>
 
@@ -191,7 +194,7 @@ export default function ReportPage({ ctx, report: r, tab }) {
             <MoneyBar r={r} />
           </div>
           <div className="tiles report-tiles">
-            {[['דירות', '110 ← 532'], ['תקבולים, מיליון ₪', million(r.revenueTotal)], ['עלויות, מיליון ₪', million(r.costTotal)], ['רווח, מיליון ₪', million(r.result.profit)], ['רווח מהעלויות', `${r.result.onCost}%`]].map(([l, val]) => (
+            {[['דירות', `${r.existingUnits} ← ${r.result.units.toLocaleString('en-US')}`], ['תקבולים, מיליון ₪', million(r.revenueTotal)], ['עלויות, מיליון ₪', million(r.costTotal)], ['רווח, מיליון ₪', million(r.result.profit)], ['רווח מהעלויות', `${r.result.onCost}%`]].map(([l, val]) => (
               <div key={l} className="tile"><span className="label">{l}</span><span className="tile-value">{val}</span></div>
             ))}
           </div>
@@ -208,14 +211,14 @@ export default function ReportPage({ ctx, report: r, tab }) {
             </div>
             <div>
               <span className="label">נקודת המינוף</span>
-              <div className="guide-card report-lever"><p className="guide-big">{r.leverage}</p></div>
+              <div className="guide-card report-lever"><p className="guide-big">מחיר המכירה למ"ר. ירידה של {be}% במחיר מוחקת את כל הרווח, בלי לגעת בשום מספר אחר.</p></div>
               <span className="label report-gap-s">חתומים על הדוח</span>
               <p className="hint">{r.signers}. {r.file}. מתכנן: {r.architect}.</p>
             </div>
           </div>
         </Section>
 
-        <Section id="structure" label="14 פרקים בשש שכבות" title="איך הדוח בנוי">
+        <Section id="structure" label={r.structureLabel} title="איך הדוח בנוי">
           <Insight><b>רוב הדוח הוא רקע.</b> {r.structureInsight}</Insight>
           <div className="table-wrap guide-table">
             <table className="table">
@@ -237,10 +240,10 @@ export default function ReportPage({ ctx, report: r, tab }) {
               </tbody>
             </table>
           </div>
-          <p className="hint">מי שקורא שומה בפעם הראשונה מתחיל מפרק 14, חוזר לפרק 10, ורק אז קורא את השאר. השורה התחתונה וההנחות הן העיקר.</p>
+          <p className="hint">{r.readingTip}</p>
         </Section>
 
-        <Section id="plan" label="מה יש היום ומה התכנית מאפשרת" title="מ־110 דירות ל־532">
+        <Section id="plan" label="מה יש היום ומה התכנית מאפשרת" title={`מ־${r.existingUnits} דירות ל־${r.result.units.toLocaleString('en-US')}`}>
           <div className="insight-grid">
             <div>
               <span className="label">מצב קיים</span>
@@ -251,7 +254,8 @@ export default function ReportPage({ ctx, report: r, tab }) {
               <dl className="guide-list">{r.proposed.map(([k, val, , p]) => <div key={k}><dt>{k} <Page p={p} /></dt><dd>{val}</dd></div>)}</dl>
             </div>
           </div>
-          <span className="label report-gap-s">חלוקת הקרקע בתכנית · 11,574 מ"ר</span>
+          {r.landUse && (<>
+          <span className="label report-gap-s">{r.landLabel}</span>
           <div className="table-wrap guide-table">
             <table className="table">
               <thead><tr><th>ייעוד</th><th>תאי שטח</th><th>מ"ר</th><th>חלק מהמתחם</th></tr></thead>
@@ -265,12 +269,13 @@ export default function ReportPage({ ctx, report: r, tab }) {
               ))}</tbody>
             </table>
           </div>
-          <span className="label report-gap-s">התמורה לבעלי הדירות: שתי גרסאות</span>
+          </>)}
+          <span className="label report-gap-s">{r.tmuraTitle}</span>
           <div className="insight-grid">
             <div className="guide-card"><span className="label">{r.tmura.report[0]} · כך חושב בשומה</span><p className="guide-big">{r.tmura.report[1]}</p></div>
-            <div className="guide-card"><span className="label">{r.tmura.draft[0]}</span><p className="guide-big">{r.tmura.draft[1]}</p></div>
+            {r.tmura.draft && <div className="guide-card"><span className="label">{r.tmura.draft[0]}</span><p className="guide-big">{r.tmura.draft[1]}</p></div>}
           </div>
-          <Insight><b>הפער הזה אינו בתחשיב.</b> {r.tmura.insight} {r.tmura.signed}</Insight>
+          <Insight><b>{r.tmuraLead}</b> {r.tmura.insight} {r.tmura.signed}</Insight>
         </Section>
 
         <Section id="income" label="צד ההכנסות" title="איך נקבע מחיר לדירה שעוד לא נבנתה">
@@ -281,42 +286,44 @@ export default function ReportPage({ ctx, report: r, tab }) {
           </ol>
           <div className="insight-grid report-gap">
             <div>
-              <span className="label">השווי שנבחר למ"ר אקוויוולנטי · עמ׳ 54</span>
+              <span className="label">{r.valuesLabel}</span>
               <div className="table-wrap guide-table">
                 <table className="table">
                   <thead><tr><th>סוג</th><th>₪ למ"ר</th></tr></thead>
                   <tbody>{r.values.map(([n, val]) => (
-                    <tr key={n} className="row"><td data-label="סוג">{n}</td><td data-label='₪ למ"ר'><span className="bar-share"><i style={{ width: `${(val / 28000) * 100}%` }} /></span> <span className="mono">{fmt(val)}</span></td></tr>
+                    <tr key={n} className="row"><td data-label="סוג">{n}</td><td data-label='₪ למ"ר'><span className="bar-share"><i style={{ width: `${(val / maxValue) * 100}%` }} /></span> <span className="mono">{fmt(val)}</span></td></tr>
                   ))}</tbody>
                 </table>
               </div>
             </div>
             <div>
-              <span className="label">הפדיון מדירות היזם, כולל מע"מ · עמ׳ 55</span>
+              {r.sales ? (<>
+              <span className="label">{r.salesLabel}</span>
               <div className="table-wrap guide-table">
                 <table className="table">
-                  <thead><tr><th>דירה</th><th>יח"ד</th><th>מ"ר אקו׳</th><th>₪ לדירה</th><th>סה"כ, אלפי ₪</th></tr></thead>
+                  <thead><tr><th>דירה</th><th>יח"ד</th><th>{r.areaLabel}</th><th>₪ לדירה</th><th>סה"כ, אלפי ₪</th></tr></thead>
                   <tbody>{r.sales.map(([n, u, eq, , unit, tot]) => (
                     <tr key={n} className="row">
                       <td data-label="דירה"><span className="project-name">{n}</span></td>
                       <td data-label='יח"ד' className="mono">{u}</td>
-                      <td data-label='מ"ר אקו׳' className="mono">{eq}</td>
+                      <td data-label={r.areaLabel} className="mono">{eq}</td>
                       <td data-label="₪ לדירה" className="mono">{fmt(unit)}</td>
                       <td data-label='סה"כ' className="mono">{fmt(tot)}</td>
                     </tr>
                   ))}</tbody>
                 </table>
               </div>
+              </>) : <span className="label">התקבולים לפי שימוש, מיליון ₪</span>}
               <dl className="summary">
                 {r.revenue.map(([n, val]) => <div key={n}><dt className="label">{n}</dt><dd>{million(val)}</dd></div>)}
                 <div><dt className="label">סה"כ תקבולים, מיליון ₪</dt><dd>{million(r.revenueTotal)}</dd></div>
               </dl>
             </div>
           </div>
-          <Insight><b>110 דירות הבעלים אינן הכנסה.</b> שוויין, {million(r.ownersValue)} מיליון ₪, הוא מה שהיזם נותן כדי לקבל את הקרקע. {r.capExample}</Insight>
+          <Insight><b>{r.existingUnits} דירות הבעלים אינן הכנסה.</b> שוויין, {million(r.ownersValue)} מיליון ₪, הוא מה שהיזם נותן כדי לקבל את הקרקע. {r.capExample}</Insight>
         </Section>
 
-        <Section id="costs" label="צד ההשקעה" title="שישה סלים של עלות">
+        <Section id="costs" label="צד ההשקעה" title={`${r.costs.length} סלים של עלות`}>
           <div className="table-wrap guide-table">
             <table className="table">
               <thead><tr><th>סל</th><th>אלפי ₪</th><th>חלק מהעלות</th><th>מה בתוכו</th></tr></thead>
@@ -330,8 +337,8 @@ export default function ReportPage({ ctx, report: r, tab }) {
               ))}</tbody>
             </table>
           </div>
-          <Insight><b>שני שלישים מהעלות הם בנייה ישירה.</b> לכן המספר החשוב ביותר בצד הזה הוא עלות הבנייה למ"ר. {r.costInsight}</Insight>
-          <span className="label report-gap-s">מספרי היסוד, ומאין כל אחד בא · עמ׳ 49</span>
+          <Insight><b>{r.costLead}</b> לכן המספר החשוב ביותר בצד הזה הוא עלות הבנייה למ"ר. {r.costInsight}</Insight>
+          <span className="label report-gap-s">{r.unitCostsLabel}</span>
           <div className="table-wrap guide-table">
             <table className="table">
               <thead><tr><th>הנחה</th><th>ערך</th><th>מקור</th></tr></thead>
@@ -340,17 +347,13 @@ export default function ReportPage({ ctx, report: r, tab }) {
               ))}</tbody>
             </table>
           </div>
-          <p className="hint">מתוך {r.unitCosts.length} מספרי היסוד כאן: {srcCount('dictated')} מוכתבים, {srcCount('judgement')} בשיקול דעת השמאי, {srcCount('legal')} הנחות עבודה. אף אחד מהם לא נמדד בפרויקט הזה.</p>
+          <p className="hint">מתוך {r.unitCosts.length} מספרי היסוד כאן: {srcCount('dictated')} מוכתבים, {srcCount('judgement')} בשיקול דעת השמאי, {srcCount('legal')} הנחות עבודה.</p>
         </Section>
 
-        <Section id="result" label="השורה התחתונה, וכמה היא יציבה" title="רווח של 159 מיליון ₪, ומה מזיז אותו">
+        <Section id="result" label="השורה התחתונה, וכמה היא יציבה" title={`רווח של ${Math.round(r.result.profit / 1000).toLocaleString('en-US')} מיליון ₪, ומה מזיז אותו`}>
           <Insight><b>ירידה של {be}% במחיר המכירה מוחקת את כל הרווח.</b> הרווח הוא הפרש קטן בין שני מספרים גדולים, ולכן הוא רגיש מאוד לכל הנחה.</Insight>
-          <Simulator r={r} />
-          <ul className="insights report-gap">
-            <li>טיוטת ההסכם עם הדיירים מתנה את העסקה ברווחיות של <b>{r.agreementProfit}% לפחות</b> בדוח האפס, ובפטור מלא מהיטל השבחה (עמ׳ 41). השומה מציגה {r.result.onCost}% ומניחה היטל של 50%.</li>
-            <li>לכן שאלת ההיטל אינה שולית: המעבר מ־50% לפטור מוסיף לרווח 43.9 מיליון ₪. נסו בסימולטור.</li>
-            <li>השומה אינה כוללת ניתוח רגישות משלה. הסימולטור כאן משלים את החסר.</li>
-          </ul>
+          <Simulator key={r.id} r={r} />
+          <ul className="insights report-gap">{r.resultNotes.map((t) => <li key={t}>{t}</li>)}</ul>
         </Section>
 
         <Section id="accuracy" label="התשובה לשאלה: האם זה מדע מדויק" title="החשבון מדויק. הקלט הוא הערכה">

@@ -29,6 +29,35 @@ export const TML2023 = {
   file: 'תיק 4059.16',
   // How the report finds its project in the database: any of these inside the project's plan-number field.
   planKeys: ['תמל2023', '6030392696'],
+  existingUnits: 110,
+  verified: 'נקרא עמוד אחר עמוד.',
+  structureLabel: '14 פרקים בשש שכבות',
+  readingTip: 'מי שקורא שומה בפעם הראשונה מתחיל מפרק 14, חוזר לפרק 10, ורק אז קורא את השאר. השורה התחתונה וההנחות הן העיקר.',
+  landLabel: 'חלוקת הקרקע בתכנית · 11,574 מ"ר',
+  tmuraTitle: 'התמורה לבעלי הדירות: שתי גרסאות',
+  tmuraLead: 'הפער הזה אינו בתחשיב.',
+  valuesLabel: 'השווי שנבחר למ"ר אקוויוולנטי · עמ׳ 54',
+  salesLabel: 'הפדיון מדירות היזם, כולל מע"מ · עמ׳ 55',
+  areaLabel: 'מ"ר אקו׳',
+  costLead: 'שני שלישים מהעלות הם בנייה ישירה.',
+  unitCostsLabel: 'מספרי היסוד, ומאין כל אחד בא · עמ׳ 49',
+  resultNotes: [
+    'טיוטת ההסכם עם הדיירים מתנה את העסקה ברווחיות של 25% לפחות בדוח האפס, ובפטור מלא מהיטל השבחה (עמ׳ 41). השומה מציגה 20.5% ומניחה היטל של 50%.',
+    'לכן שאלת ההיטל אינה שולית: המעבר מ־50% לפטור מוסיף לרווח 43.9 מיליון ₪. נסו בסימולטור.',
+    'השומה אינה כוללת ניתוח רגישות משלה. הסימולטור כאן משלים את החסר.'
+  ],
+  simNotes: { price: 'נתון שוק מותאם', build: 'הנחיה מוכתבת: 5,500 ₪', months: 'שיקול דעת: 48 חודשים', levy: 'הנחת עבודה: 50%, החלטת מועצת העיר' },
+  // Sensitivity model, thousands of ₪ (see simulate in index.js).
+  model: {
+    revenue: 937354, cost: 777991,
+    byRevenue: 18747 + 16309 + 14998, // marketing 2%, legal 1.5%, sale-law guarantee 0.8%
+    direct: 410854 + 85423 + 24107, // direct construction: developer, owners, public
+    byDirect: 20543 + 10271 + 333 + 4271 + 2136 + 1205 + 603 + 362, // contingency, supervision, planning %
+    byTime: 19536 + 720, // owners' rent and tenants' supervisor
+    interest: 31645 + 2877, // interest and bank fee
+    levy: 43900, levyRate: 50, months: 48,
+    financed: 1526 + 513325 + 128011 + 32552 // costs before financing and levy
+  },
 
   // ---- 01 ----
   is: 'שומת מקרקעין מלאה, מבוססת הנחה. היא בודקת אם התכנית כדאית כלכלית ליזם: כמה ייכנס ממכירת הדירות, כמה יעלה לבנות ולפנות, וכמה רווח נשאר.',

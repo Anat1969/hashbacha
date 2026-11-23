@@ -77,14 +77,25 @@ const short = composeHref('gmail', { to: 'a@b.c', subject: 'תזכורת', text:
 ok(!short.trimmed && short.href.includes(encodeURIComponent('תזכורת קצרה')), 'short mail keeps its full body in the link');
 
 // Digital reports: the sensitivity model must reproduce the report's own bottom line.
-const { REPORTS, simulate, SIM_BASE, breakEvenPrice } = await import('../src/lib/reports/index.js');
+const { REPORTS, simulate, simBase, breakEvenPrice } = await import('../src/lib/reports/index.js');
 const rep = REPORTS[0];
-const b0 = simulate(SIM_BASE);
+const M0 = rep.model; const SIM_BASE = simBase(M0);
+const b0 = simulate(M0, SIM_BASE);
 ok(Math.round(b0.profit) === rep.result.profit && b0.onCost.toFixed(1) === '20.5' && b0.onSales.toFixed(1) === '17.0', `report model at base = report (${Math.round(b0.profit)}, ${b0.onCost.toFixed(1)}%, ${b0.onSales.toFixed(1)}%)`);
 ok(rep.costs.reduce((a, c) => a + c.sum, 0) - rep.costTotal === 102 && rep.revenue.reduce((a, c) => a + c[1], 0) === rep.revenueTotal, 'report data: revenue lines sum to the total; cost lines differ from the stated total by the report\'s own 102');
-ok(Math.abs(simulate({ ...SIM_BASE, price: breakEvenPrice() }).profit) < 1 && Math.round(breakEvenPrice()) === -18, 'break-even price drop is 18%');
-ok(Math.round(simulate({ ...SIM_BASE, levy: 0 }).profit - b0.profit) === 43900 && simulate({ ...SIM_BASE, build: 10 }).profit < b0.profit && simulate({ ...SIM_BASE, months: 60 }).profit < b0.profit, 'levy exemption adds 43,900; dearer or longer construction lowers profit');
+ok(Math.abs(simulate(M0, { ...SIM_BASE, price: breakEvenPrice(M0) }).profit) < 1 && Math.round(breakEvenPrice(M0)) === -18, 'break-even price drop is 18%');
+ok(Math.round(simulate(M0, { ...SIM_BASE, levy: 0 }).profit - b0.profit) === 43900 && simulate(M0, { ...SIM_BASE, build: 10 }).profit < b0.profit && simulate(M0, { ...SIM_BASE, months: 60 }).profit < b0.profit, 'levy exemption adds 43,900; dearer or longer construction lowers profit');
 ok(rep.sales.reduce((a, x) => a + x[1], 0) === 422 && rep.sales.reduce((a, x) => a + x[5], 0) === 1031570, 'sales table: 422 developer units, 1,031,570 incl. VAT');
+
+// Every digital report: its model reproduces its own bottom line, and its tables add up.
+for (const r of REPORTS) {
+  const b = simulate(r.model, simBase(r.model));
+  ok(Math.abs(b.profit - r.result.profit) < 1 && b.onCost.toFixed(1) === r.result.onCost.toFixed(1) && b.onSales.toFixed(1) === r.result.onSales.toFixed(1), `${r.plan}: model at base = report (${Math.round(b.profit)}, ${b.onCost.toFixed(1)}%, ${b.onSales.toFixed(1)}%)`);
+  const costGap = Math.abs(r.costs.reduce((a, c) => a + c.sum, 0) - r.costTotal);
+  ok(r.revenue.reduce((a, c) => a + c[1], 0) === r.revenueTotal && costGap <= 102 && Math.abs(r.revenueTotal - r.costTotal - r.result.profit) <= 1, `${r.plan}: revenue lines, cost buckets (gap ${costGap}) and profit are consistent`);
+  ok(Object.keys(r.params).length === 22 && r.layers.length === 6 && r.findings.every((x) => x.length === 4) && r.unitCosts.every((u) => ['dictated', 'judgement', 'legal'].includes(u[2])), `${r.plan}: 22 parameters, six layers, well-formed findings and sources`);
+}
+ok(REPORTS.length === 3 && Math.round(breakEvenPrice(REPORTS[1].model)) === -18 && Math.round(breakEvenPrice(REPORTS[2].model)) === -20, 'three digital reports; break-even price drops of 18%, 18% and 20%');
 
 // Report comparison and project linking.
 const cmp = await import('../src/lib/reports/compare.js');
